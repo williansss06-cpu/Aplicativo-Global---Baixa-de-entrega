@@ -64,6 +64,13 @@ table{width:100%;border-collapse:collapse;font-size:13px} th,td{padding:11px 8px
   padding:8px 12px;
 }
 
+
+/* Touch e câmera no celular */
+#sig{touch-action:none!important;-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important}
+.camera-input{position:absolute!important;left:-10000px!important;width:1px!important;height:1px!important;opacity:0!important}
+.camera-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:52px;border:1px solid #cfd6dc;border-radius:9px;background:#f8fafc;color:#172033;font-weight:700;font-size:14px}
+.camera-btn .icon{font-size:24px}
+#fotoPreview{display:none;width:100%;max-height:260px;object-fit:cover;border-radius:10px;margin-top:10px}
 </style>
 </head>
 <body>
@@ -113,7 +120,10 @@ table{width:100%;border-collapse:collapse;font-size:13px} th,td{padding:11px 8px
  <div class="panel"><h2>2. Recebedor</h2><div class="grid2"><div><label>Nome *</label><input id="recNome"></div><div><label>CPF/Documento</label><input id="recDoc"></div></div><label>Função/Setor</label><input id="recFunc"><label>Observações / ressalvas</label><textarea id="obs"></textarea></div>
  <div class="panel"><h2>3. Evidências</h2><div class="grid2"><div><label>Data</label><input id="data" type="date"></div><div><label>Hora</label><input id="hora" type="time"></div></div>
   <label>GPS</label><div class="actions"><button class="btn ghost" onclick="gps()">📍 Capturar localização</button></div><div id="gpsStatus" class="status">Não capturado.</div>
-  <label>Foto da entrega</label><input id="foto" type="file" accept="image/*" capture="environment">
+  <label>Foto da entrega</label>
+<input id="foto" class="camera-input" type="file" accept="image/*" capture="environment">
+<label for="foto" class="camera-btn"><span class="icon">📷</span><span>Abrir câmera do celular</span></label>
+<img id="fotoPreview" alt="Prévia da foto">
  </div>
  <div class="panel"><h2>4. Assinatura</h2><div class="sub">O recebedor assina com o dedo.</div><canvas id="sig"></canvas><button class="btn danger" style="margin-top:8px" onclick="limpar()">Limpar assinatura</button></div>
  <div class="panel"><h2>5. Finalização</h2><label style="font-weight:normal"><input id="aceite" type="checkbox" style="width:auto"> Confirmo o recebimento da mercadoria conforme informações e ressalvas acima.</label><button id="salvarBtn" class="btn orange full" onclick="salvarEntrega()">Finalizar e salvar entrega</button><div id="saveStatus" class="status">Aguardando preenchimento.</div></div>
@@ -177,9 +187,35 @@ async function salvarGoogle(){
  if(error){googleStatus.textContent='A função segura admin-save-google-key precisa ser implantada: '+error.message;return}
  googleKey.value='';googleStatus.textContent='Credencial salva com sucesso.';
 }
+document.getElementById('foto').addEventListener('change',e=>{
+ const f=e.target.files[0],img=document.getElementById('fotoPreview');
+ if(!f){img.style.display='none';return}
+ img.src=URL.createObjectURL(f);img.style.display='block';
+});
 function gps(){gpsStatus.textContent='Capturando...';navigator.geolocation.getCurrentPosition(p=>{coords={lat:p.coords.latitude,lng:p.coords.longitude,acc:p.coords.accuracy};gpsStatus.textContent=`Latitude ${coords.lat.toFixed(6)} | Longitude ${coords.lng.toFixed(6)} | precisão ${Math.round(coords.acc)} m`},e=>gpsStatus.textContent='Erro: '+e.message,{enableHighAccuracy:true,timeout:12000})}
-const c=document.getElementById('sig'),cx=c.getContext('2d');function size(){let r=c.getBoundingClientRect(),d=devicePixelRatio||1;c.width=r.width*d;c.height=220*d;cx.setTransform(d,0,0,d,0,0);cx.lineWidth=2.2;cx.lineCap='round'}setTimeout(size,200);let drawing=false;
-function pt(e){let r=c.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}}c.onpointerdown=e=>{drawing=true;let p=pt(e);cx.beginPath();cx.moveTo(p.x,p.y);c.setPointerCapture(e.pointerId)};c.onpointermove=e=>{if(!drawing)return;let p=pt(e);cx.lineTo(p.x,p.y);cx.stroke();assinou=true};c.onpointerup=()=>drawing=false;function limpar(){cx.clearRect(0,0,c.width,c.height);assinou=false}
+const c=document.getElementById('sig'),cx=c.getContext('2d');
+let drawing=false;
+function size(){
+  const r=c.getBoundingClientRect(),d=Math.max(devicePixelRatio||1,1);
+  c.width=Math.round(r.width*d);c.height=Math.round(r.height*d);
+  cx.setTransform(d,0,0,d,0,0);cx.lineWidth=2.6;cx.lineCap='round';cx.lineJoin='round';cx.strokeStyle='#111827';
+}
+setTimeout(size,200);
+function xy(clientX,clientY){const r=c.getBoundingClientRect();return{x:clientX-r.left,y:clientY-r.top}}
+function startDraw(x,y){drawing=true;const p=xy(x,y);cx.beginPath();cx.moveTo(p.x,p.y);cx.lineTo(p.x+.01,p.y+.01);cx.stroke();assinou=true}
+function moveDraw(x,y){if(!drawing)return;const p=xy(x,y);cx.lineTo(p.x,p.y);cx.stroke();assinou=true}
+function endDraw(){drawing=false;cx.closePath()}
+if(window.PointerEvent){
+ c.addEventListener('pointerdown',e=>{e.preventDefault();try{c.setPointerCapture(e.pointerId)}catch(_){}startDraw(e.clientX,e.clientY)},{passive:false});
+ c.addEventListener('pointermove',e=>{if(!drawing)return;e.preventDefault();moveDraw(e.clientX,e.clientY)},{passive:false});
+ c.addEventListener('pointerup',e=>{e.preventDefault();endDraw()},{passive:false});
+ c.addEventListener('pointercancel',endDraw);
+}else{
+ c.addEventListener('touchstart',e=>{e.preventDefault();const t=e.touches[0];startDraw(t.clientX,t.clientY)},{passive:false});
+ c.addEventListener('touchmove',e=>{e.preventDefault();const t=e.touches[0];moveDraw(t.clientX,t.clientY)},{passive:false});
+ c.addEventListener('touchend',e=>{e.preventDefault();endDraw()},{passive:false});
+}
+function limpar(){cx.save();cx.setTransform(1,0,0,1,0,0);cx.clearRect(0,0,c.width,c.height);cx.restore();assinou=false;size()}
 let now=new Date();data.value=now.toISOString().slice(0,10);hora.value=now.toTimeString().slice(0,5);
 
 pdf.onchange=async()=>{
