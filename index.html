@@ -71,6 +71,27 @@ table{width:100%;border-collapse:collapse;font-size:13px} th,td{padding:11px 8px
 .camera-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:52px;border:1px solid #cfd6dc;border-radius:9px;background:#f8fafc;color:#172033;font-weight:700;font-size:14px}
 .camera-btn .icon{font-size:24px}
 #fotoPreview{display:none;width:100%;max-height:260px;object-fit:cover;border-radius:10px;margin-top:10px}
+
+/* Assinatura mobile em tela ampliada */
+.sig-summary{border:1px solid #dce1e6;border-radius:10px;background:#fafbfc;padding:12px}
+.sig-preview{display:none;width:100%;max-height:150px;object-fit:contain;background:#fff;border:1px solid #dce1e6;border-radius:9px;margin:10px 0}
+.sig-modal{position:fixed;inset:0;z-index:9999;background:rgba(5,10,18,.92);display:flex;align-items:center;justify-content:center;padding:14px}
+.sig-modal.hidden{display:none!important}
+.sig-dialog{width:min(900px,100%);background:#fff;border-radius:16px;padding:14px;box-shadow:0 20px 80px #0008}
+.sig-dialog h2{margin:0 0 4px;font-size:20px}
+.sig-help{font-size:13px;color:#667085;margin-bottom:10px}
+.sig-pad-wrap{position:relative;width:100%;height:min(58vh,430px);min-height:280px;border:2px solid #a8b0b8;border-radius:12px;overflow:hidden;background:#fff}
+#sig{display:block;width:100%;height:100%;border:0;border-radius:0;background:#fff;touch-action:none!important;overscroll-behavior:contain;-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important}
+.sig-actions{display:grid;grid-template-columns:1fr 1fr 1.35fr;gap:8px;margin-top:12px}
+body.sig-open{overflow:hidden;touch-action:none}
+@media(max-width:600px){
+ .sig-modal{padding:0;align-items:stretch}
+ .sig-dialog{width:100%;height:100dvh;border-radius:0;padding:12px;display:flex;flex-direction:column}
+ .sig-pad-wrap{height:auto;min-height:0;flex:1}
+ .sig-actions{grid-template-columns:1fr 1fr}
+ .sig-actions .confirmar{grid-column:1/-1}
+}
+
 </style>
 </head>
 <body>
@@ -125,7 +146,13 @@ table{width:100%;border-collapse:collapse;font-size:13px} th,td{padding:11px 8px
 <label for="foto" class="camera-btn"><span class="icon">📷</span><span>Abrir câmera do celular</span></label>
 <img id="fotoPreview" alt="Prévia da foto">
  </div>
- <div class="panel"><h2>4. Assinatura</h2><div class="sub">O recebedor assina com o dedo.</div><canvas id="sig"></canvas><button class="btn danger" style="margin-top:8px" onclick="limpar()">Limpar assinatura</button></div>
+ <div class="panel"><h2>4. Assinatura</h2><div class="sub">O recebedor assina com o dedo.</div>
+  <div class="sig-summary">
+    <button type="button" class="btn darkbtn full" onclick="abrirAssinatura()">✍️ Coletar assinatura</button>
+    <img id="sigPreview" class="sig-preview" alt="Prévia da assinatura">
+    <div id="sigStatus" class="status">Assinatura ainda não coletada.</div>
+  </div>
+ </div>
  <div class="panel"><h2>5. Finalização</h2><label style="font-weight:normal"><input id="aceite" type="checkbox" style="width:auto"> Confirmo o recebimento da mercadoria conforme informações e ressalvas acima.</label><button id="salvarBtn" class="btn orange full" onclick="salvarEntrega()">Finalizar e salvar entrega</button><div id="saveStatus" class="status">Aguardando preenchimento.</div></div>
 </section>
 
@@ -143,6 +170,20 @@ table{width:100%;border-collapse:collapse;font-size:13px} th,td{padding:11px 8px
 </div>
 <nav class="mobile-nav"><button class="adm" onclick="show('dashboard')"><b>⌂</b>Início</button><button onclick="show('nova')"><b>＋</b>Nova</button><button onclick="show('entregas')"><b>☷</b>Entregas</button><button onclick="sair()"><b>♙</b>Sair</button></nav>
 </section>
+
+
+<div id="sigModal" class="sig-modal hidden" role="dialog" aria-modal="true" aria-labelledby="sigTitulo">
+ <div class="sig-dialog">
+  <h2 id="sigTitulo">Assinatura do recebedor</h2>
+  <div class="sig-help">Assine no quadro abaixo usando o dedo. A página ficará bloqueada para rolagem enquanto estiver assinando.</div>
+  <div class="sig-pad-wrap"><canvas id="sig"></canvas></div>
+  <div class="sig-actions">
+   <button type="button" class="btn danger" onclick="limpar()">Limpar</button>
+   <button type="button" class="btn ghost" onclick="cancelarAssinatura()">Cancelar</button>
+   <button type="button" class="btn orange confirmar" onclick="confirmarAssinatura()">Confirmar assinatura</button>
+  </div>
+ </div>
+</div>
 
 <script>
 const SB_URL='https://gdlgceoliupjinkgunxe.supabase.co', SB_KEY='sb_publishable_CG8-Cflr7Wk0QyMJJyKwdw_GmYQ3FFn';
@@ -194,28 +235,111 @@ document.getElementById('foto').addEventListener('change',e=>{
 });
 function gps(){gpsStatus.textContent='Capturando...';navigator.geolocation.getCurrentPosition(p=>{coords={lat:p.coords.latitude,lng:p.coords.longitude,acc:p.coords.accuracy};gpsStatus.textContent=`Latitude ${coords.lat.toFixed(6)} | Longitude ${coords.lng.toFixed(6)} | precisão ${Math.round(coords.acc)} m`},e=>gpsStatus.textContent='Erro: '+e.message,{enableHighAccuracy:true,timeout:12000})}
 const c=document.getElementById('sig'),cx=c.getContext('2d');
-let drawing=false;
-function size(){
-  const r=c.getBoundingClientRect(),d=Math.max(devicePixelRatio||1,1);
-  c.width=Math.round(r.width*d);c.height=Math.round(r.height*d);
-  cx.setTransform(d,0,0,d,0,0);cx.lineWidth=2.6;cx.lineCap='round';cx.lineJoin='round';cx.strokeStyle='#111827';
+const sigModal=document.getElementById('sigModal'),sigPreview=document.getElementById('sigPreview'),sigStatus=document.getElementById('sigStatus');
+let drawing=false, activePointer=null, sigConfirmedData='', sigBeforeOpen='', strokePoints=0;
+
+function configurarCaneta(){
+  cx.lineWidth=2.8;cx.lineCap='round';cx.lineJoin='round';cx.strokeStyle='#111827';
 }
-setTimeout(size,200);
-function xy(clientX,clientY){const r=c.getBoundingClientRect();return{x:clientX-r.left,y:clientY-r.top}}
-function startDraw(x,y){drawing=true;const p=xy(x,y);cx.beginPath();cx.moveTo(p.x,p.y);cx.lineTo(p.x+.01,p.y+.01);cx.stroke();assinou=true}
-function moveDraw(x,y){if(!drawing)return;const p=xy(x,y);cx.lineTo(p.x,p.y);cx.stroke();assinou=true}
-function endDraw(){drawing=false;cx.closePath()}
+function size(preserve=true){
+  const r=c.getBoundingClientRect();
+  if(!r.width||!r.height)return;
+  const oldData=preserve && c.width && c.height ? c.toDataURL('image/png') : '';
+  const d=Math.max(window.devicePixelRatio||1,1);
+  c.width=Math.max(1,Math.round(r.width*d));
+  c.height=Math.max(1,Math.round(r.height*d));
+  c.style.width=r.width+'px';c.style.height=r.height+'px';
+  cx.setTransform(d,0,0,d,0,0);configurarCaneta();
+  if(oldData && oldData.length>100){
+    const im=new Image();
+    im.onload=()=>{cx.save();cx.setTransform(d,0,0,d,0,0);cx.drawImage(im,0,0,r.width,r.height);cx.restore();configurarCaneta()};
+    im.src=oldData;
+  }
+}
+function xy(clientX,clientY){
+  const r=c.getBoundingClientRect();
+  return {x:clientX-r.left,y:clientY-r.top};
+}
+function startDraw(clientX,clientY){
+  drawing=true;strokePoints++;
+  const p=xy(clientX,clientY);
+  cx.beginPath();cx.moveTo(p.x,p.y);cx.lineTo(p.x+.15,p.y+.15);cx.stroke();
+}
+function moveDraw(clientX,clientY){
+  if(!drawing)return;
+  strokePoints++;
+  const p=xy(clientX,clientY);cx.lineTo(p.x,p.y);cx.stroke();
+}
+function endDraw(){if(!drawing)return;drawing=false;try{cx.closePath()}catch(_){}}
+function limpar(){
+  drawing=false;activePointer=null;strokePoints=0;assinou=false;
+  cx.save();cx.setTransform(1,0,0,1,0,0);cx.clearRect(0,0,c.width,c.height);cx.restore();
+  configurarCaneta();
+}
+function carregarNoCanvas(dataUrl){
+  limpar();
+  if(!dataUrl)return;
+  const im=new Image();
+  im.onload=()=>{
+    const r=c.getBoundingClientRect(),d=Math.max(window.devicePixelRatio||1,1);
+    cx.save();cx.setTransform(d,0,0,d,0,0);cx.drawImage(im,0,0,r.width,r.height);cx.restore();configurarCaneta();
+    strokePoints=10;
+  };
+  im.src=dataUrl;
+}
+function abrirAssinatura(){
+  sigBeforeOpen=sigConfirmedData;
+  sigModal.classList.remove('hidden');document.body.classList.add('sig-open');
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    size(false);
+    if(sigConfirmedData)carregarNoCanvas(sigConfirmedData);
+  }));
+}
+function cancelarAssinatura(){
+  sigModal.classList.add('hidden');document.body.classList.remove('sig-open');
+  sigConfirmedData=sigBeforeOpen;
+  assinou=!!sigConfirmedData;
+}
+function confirmarAssinatura(){
+  if(strokePoints<2){alert('Faça a assinatura no quadro antes de confirmar.');return}
+  sigConfirmedData=c.toDataURL('image/png');
+  assinou=true;
+  sigPreview.src=sigConfirmedData;sigPreview.style.display='block';
+  sigStatus.textContent='Assinatura coletada e pronta para salvar.';
+  sigModal.classList.add('hidden');document.body.classList.remove('sig-open');
+}
+function finalizarPointer(e){
+  if(activePointer!==null && e.pointerId!==undefined && e.pointerId!==activePointer)return;
+  endDraw();
+  if(e.pointerId!==undefined){try{c.releasePointerCapture(e.pointerId)}catch(_){}}
+  activePointer=null;
+}
 if(window.PointerEvent){
- c.addEventListener('pointerdown',e=>{e.preventDefault();try{c.setPointerCapture(e.pointerId)}catch(_){}startDraw(e.clientX,e.clientY)},{passive:false});
- c.addEventListener('pointermove',e=>{if(!drawing)return;e.preventDefault();moveDraw(e.clientX,e.clientY)},{passive:false});
- c.addEventListener('pointerup',e=>{e.preventDefault();endDraw()},{passive:false});
- c.addEventListener('pointercancel',endDraw);
+  c.addEventListener('pointerdown',e=>{
+    if(e.pointerType==='mouse' && e.button!==0)return;
+    e.preventDefault();activePointer=e.pointerId;
+    try{c.setPointerCapture(e.pointerId)}catch(_){}
+    startDraw(e.clientX,e.clientY);
+  },{passive:false});
+  c.addEventListener('pointermove',e=>{
+    if(!drawing||e.pointerId!==activePointer)return;
+    e.preventDefault();moveDraw(e.clientX,e.clientY);
+  },{passive:false});
+  c.addEventListener('pointerup',e=>{e.preventDefault();finalizarPointer(e)},{passive:false});
+  c.addEventListener('pointercancel',finalizarPointer,{passive:false});
+  c.addEventListener('lostpointercapture',()=>{endDraw();activePointer=null});
 }else{
- c.addEventListener('touchstart',e=>{e.preventDefault();const t=e.touches[0];startDraw(t.clientX,t.clientY)},{passive:false});
- c.addEventListener('touchmove',e=>{e.preventDefault();const t=e.touches[0];moveDraw(t.clientX,t.clientY)},{passive:false});
- c.addEventListener('touchend',e=>{e.preventDefault();endDraw()},{passive:false});
+  c.addEventListener('touchstart',e=>{e.preventDefault();const t=e.changedTouches[0];startDraw(t.clientX,t.clientY)},{passive:false});
+  c.addEventListener('touchmove',e=>{e.preventDefault();const t=e.changedTouches[0];moveDraw(t.clientX,t.clientY)},{passive:false});
+  c.addEventListener('touchend',e=>{e.preventDefault();endDraw()},{passive:false});
+  c.addEventListener('touchcancel',endDraw,{passive:false});
+  c.addEventListener('mousedown',e=>{if(e.button!==0)return;e.preventDefault();startDraw(e.clientX,e.clientY)});
+  window.addEventListener('mousemove',e=>{if(drawing)moveDraw(e.clientX,e.clientY)});
+  window.addEventListener('mouseup',endDraw);
 }
-function limpar(){cx.save();cx.setTransform(1,0,0,1,0,0);cx.clearRect(0,0,c.width,c.height);cx.restore();assinou=false;size()}
+window.addEventListener('orientationchange',()=>{if(!sigModal.classList.contains('hidden'))setTimeout(()=>size(true),250)});
+window.addEventListener('resize',()=>{if(!sigModal.classList.contains('hidden'))clearTimeout(window.__sigResize)|| (window.__sigResize=setTimeout(()=>{window.__sigResize=null;size(true)},180))});
+
 let now=new Date();data.value=now.toISOString().slice(0,10);hora.value=now.toTimeString().slice(0,5);
 
 pdf.onchange=async()=>{
@@ -294,7 +418,7 @@ async function salvarEntrega(){
   if(!nf.value||!dest.value||!recNome.value||!pdf.files[0])throw Error('Preencha NF, destinatário, recebedor e PDF.');
   if(!assinou)throw Error('Colete a assinatura.');if(!aceite.checked)throw Error('Marque a confirmação.');
   salvarBtn.disabled=true;saveStatus.textContent='Enviando arquivos...';let id=crypto.randomUUID(),base=`${perfil.user_id}/${id}`;
-  let pdfPath=await up(`${base}/nota_${clean(pdf.files[0].name)}`,pdf.files[0]);let sigPath=await up(`${base}/assinatura.png`,blob(c.toDataURL()));
+  let pdfPath=await up(`${base}/nota_${clean(pdf.files[0].name)}`,pdf.files[0]);let sigPath=await up(`${base}/assinatura.png`,blob(sigConfirmedData));
   let fotoPath=null;if(foto.files[0])fotoPath=await up(`${base}/foto_${clean(foto.files[0].name)}`,foto.files[0]);
   let payload={id,user_id:perfil.user_id,numero_nf:nf.value,destinatario:dest.value,recebedor_nome:recNome.value,entregue_em:new Date(`${data.value}T${hora.value||'00:00'}`).toISOString(),pdf_path:pdfPath,assinatura_path:sigPath,foto_path:fotoPath,serie:serie.value||null,chave_acesso:chave.value||null,cidade:cidade.value||null,uf:uf.value.toUpperCase()||null,recebedor_documento:recDoc.value||null,recebedor_funcao:recFunc.value||null,observacoes:obs.value||null,latitude:coords?.lat||null,longitude:coords?.lng||null,precisao_gps:coords?.acc||null};
   let {error}=await sb.from('global_entregas').insert(payload);if(error)throw error;saveStatus.textContent='Entrega salva com sucesso.';alert('Comprovante salvo com sucesso.');await carregarEntregas();
