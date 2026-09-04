@@ -92,6 +92,25 @@ body.sig-open{overflow:hidden;touch-action:none}
  .sig-actions .confirmar{grid-column:1/-1}
 }
 
+
+/* Visualização gerencial de comprovantes */
+.comprov-btn{padding:7px 10px;border:0;border-radius:8px;background:#111827;color:#fff;font-weight:700;cursor:pointer}
+.proof-modal{position:fixed;inset:0;z-index:10020;background:rgba(5,10,18,.86);display:flex;align-items:center;justify-content:center;padding:16px}
+.proof-modal.hidden{display:none!important}
+.proof-dialog{width:min(980px,100%);max-height:94vh;overflow:auto;background:#fff;border-radius:16px;padding:18px}
+.proof-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:14px}
+.proof-head h2{margin:0}
+.proof-close{border:0;background:#eef1f4;border-radius:9px;padding:9px 13px;font-weight:800;cursor:pointer}
+.proof-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.proof-card{border:1px solid #dce1e6;border-radius:12px;padding:12px;background:#fafbfc}
+.proof-card h3{margin:0 0 10px}
+.proof-img{display:block;width:100%;max-height:420px;object-fit:contain;background:#fff;border-radius:9px;border:1px solid #e2e5e9}
+.proof-empty{padding:28px 10px;text-align:center;color:#667085;background:#fff;border-radius:9px}
+.proof-info{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+.proof-info div{background:#f5f6f8;border-radius:9px;padding:10px}
+.proof-info small{display:block;color:#667085}.proof-info b{display:block;margin-top:3px;word-break:break-word}
+@media(max-width:700px){.proof-grid,.proof-info{grid-template-columns:1fr}.proof-dialog{padding:12px}}
+
 </style>
 </head>
 <body>
@@ -120,7 +139,7 @@ body.sig-open{overflow:hidden;touch-action:none}
 <section id="dashboard" class="page">
  <h1>Dashboard</h1><div class="sub">Visão geral dos comprovantes de entrega</div>
  <div class="kpis"><div class="kpi"><span>Entregas</span><b id="kEnt">0</b></div><div class="kpi"><span>Motoristas ativos</span><b id="kMot">0</b></div><div class="kpi"><span>Comprovantes hoje</span><b id="kHoje">0</b></div><div class="kpi"><span>Com GPS</span><b id="kGps">0</b></div></div>
- <div class="panel"><h2>Entregas recentes</h2><div style="overflow:auto"><table><thead><tr><th>NF</th><th>Destinatário</th><th>Motorista</th><th>Data</th><th>Status</th></tr></thead><tbody id="recentes"></tbody></table></div></div>
+ <div class="panel"><h2>Entregas recentes</h2><div style="overflow:auto"><table><thead><tr><th>NF</th><th>Destinatário</th><th>Motorista</th><th>Data</th><th>Status</th><th>Comprovante</th></tr></thead><tbody id="recentes"></tbody></table></div></div>
 </section>
 
 <section id="motoristas" class="page hidden">
@@ -158,7 +177,7 @@ body.sig-open{overflow:hidden;touch-action:none}
 
 <section id="entregas" class="page hidden">
  <h1>Entregas</h1><div class="sub">Histórico de comprovantes</div>
- <div class="panel"><input id="busca" placeholder="Buscar por NF ou destinatário..." oninput="renderEntregas()"><div style="overflow:auto;margin-top:12px"><table><thead><tr><th>NF</th><th>Destinatário</th><th>Recebedor</th><th>Motorista</th><th>Data/Hora</th></tr></thead><tbody id="listaEntregas"></tbody></table></div></div>
+ <div class="panel"><input id="busca" placeholder="Buscar por NF ou destinatário..." oninput="renderEntregas()"><div style="overflow:auto;margin-top:12px"><table><thead><tr><th>NF</th><th>Destinatário</th><th>Recebedor</th><th>Motorista</th><th>Data/Hora</th><th>Comprovante</th></tr></thead><tbody id="listaEntregas"></tbody></table></div></div>
 </section>
 
 <section id="config" class="page hidden">
@@ -181,6 +200,18 @@ body.sig-open{overflow:hidden;touch-action:none}
    <button type="button" class="btn danger" onclick="limpar()">Limpar</button>
    <button type="button" class="btn ghost" onclick="cancelarAssinatura()">Cancelar</button>
    <button type="button" class="btn orange confirmar" onclick="confirmarAssinatura()">Confirmar assinatura</button>
+  </div>
+ </div>
+</div>
+
+
+<div id="proofModal" class="proof-modal hidden" role="dialog" aria-modal="true">
+ <div class="proof-dialog">
+  <div class="proof-head"><h2>Comprovante da entrega</h2><button type="button" class="proof-close" onclick="fecharComprovante()">Fechar</button></div>
+  <div id="proofInfo" class="proof-info"></div>
+  <div class="proof-grid">
+   <div class="proof-card"><h3>Foto da entrega</h3><div id="proofFotoBox" class="proof-empty">Carregando...</div></div>
+   <div class="proof-card"><h3>Assinatura do recebedor</h3><div id="proofAssBox" class="proof-empty">Carregando...</div></div>
   </div>
  </div>
 </div>
@@ -429,8 +460,30 @@ async function carregarEntregas(){
  if(perfil?.perfil!=='admin')q=q.eq('motorista_id',perfil.user_id);let {data,error}=await q;if(error){console.error(error);return}entregasCache=data||[];renderEntregas();
  if(perfil?.perfil==='admin'){kEnt.textContent=entregasCache.length;let hoje=new Date().toISOString().slice(0,10);kHoje.textContent=entregasCache.filter(x=>String(x.entregue_em||'').slice(0,10)===hoje).length;kGps.textContent=entregasCache.filter(x=>x.latitude!=null).length;recentes.innerHTML=entregasCache.slice(0,8).map(row).join('')}
 }
-function row(x){return `<tr><td>${esc(x.numero_nf)}</td><td>${esc(x.destinatario)}</td><td>${esc(x.motorista_nome||perfil?.nome||'')}</td><td>${esc(String(x.entregue_em||'').slice(0,10))}</td><td><span class="badge ok">Entregue</span></td></tr>`}
-function renderEntregas(){let s=(busca?.value||'').toLowerCase(),a=entregasCache.filter(x=>((x.numero_nf||'')+' '+(x.destinatario||'')).toLowerCase().includes(s));listaEntregas.innerHTML=a.map(x=>`<tr><td>${esc(x.numero_nf)}</td><td>${esc(x.destinatario)}</td><td>${esc(x.recebedor_nome)}</td><td>${esc(x.motorista_nome||perfil?.nome||'')}</td><td>${esc(x.entregue_em?new Date(x.entregue_em).toLocaleString('pt-BR'):'')}</td></tr>`).join('')}
+function proofButton(x){return `<button type="button" class="comprov-btn" onclick="abrirComprovante('${esc(x.id)}')">Ver foto / assinatura</button>`}
+function row(x){return `<tr><td>${esc(x.numero_nf)}</td><td>${esc(x.destinatario)}</td><td>${esc(x.motorista_nome||perfil?.nome||'')}</td><td>${esc(String(x.entregue_em||'').slice(0,10))}</td><td><span class="badge ok">Entregue</span></td><td>${proofButton(x)}</td></tr>`}
+function renderEntregas(){let s=(busca?.value||'').toLowerCase(),a=entregasCache.filter(x=>((x.numero_nf||'')+' '+(x.destinatario||'')).toLowerCase().includes(s));listaEntregas.innerHTML=a.map(x=>`<tr><td>${esc(x.numero_nf)}</td><td>${esc(x.destinatario)}</td><td>${esc(x.recebedor_nome)}</td><td>${esc(x.motorista_nome||perfil?.nome||'')}</td><td>${esc(x.entregue_em?new Date(x.entregue_em).toLocaleString('pt-BR'):'')}</td><td>${proofButton(x)}</td></tr>`).join('')}
+async function signedUrl(path){
+ if(!path)return null;
+ const {data,error}=await sb.storage.from('global-entregas').createSignedUrl(path,3600);
+ if(error){console.error('Erro ao abrir arquivo:',error);return null}
+ return data?.signedUrl||null;
+}
+async function abrirComprovante(id){
+ const x=entregasCache.find(e=>String(e.id)===String(id));if(!x)return;
+ const modal=document.getElementById('proofModal'),info=document.getElementById('proofInfo'),fb=document.getElementById('proofFotoBox'),ab=document.getElementById('proofAssBox');
+ info.innerHTML=`<div><small>NF</small><b>${esc(x.numero_nf||'-')}</b></div><div><small>Motorista</small><b>${esc(x.motorista_nome||'-')}</b></div><div><small>Recebedor</small><b>${esc(x.recebedor_nome||'-')}</b></div><div><small>Destinatário</small><b>${esc(x.destinatario||'-')}</b></div><div><small>Data/Hora</small><b>${esc(x.entregue_em?new Date(x.entregue_em).toLocaleString('pt-BR'):'-')}</b></div><div><small>Local</small><b>${esc([x.cidade,x.uf].filter(Boolean).join(' / ')||'-')}</b></div>`;
+ fb.className='proof-empty';ab.className='proof-empty';fb.textContent=x.foto_path?'Carregando foto...':'Nenhuma foto registrada.';ab.textContent=x.assinatura_path?'Carregando assinatura...':'Nenhuma assinatura registrada.';
+ modal.classList.remove('hidden');document.body.classList.add('sig-open');
+ const [fu,su]=await Promise.all([signedUrl(x.foto_path),signedUrl(x.assinatura_path)]);
+ if(fu)fb.outerHTML=`<img id="proofFotoBox" class="proof-img" src="${esc(fu)}" alt="Foto da entrega">`;
+ else if(x.foto_path){fb.textContent='Não foi possível abrir a foto. Verifique a política de leitura do Storage.'}
+ const assAtual=document.getElementById('proofAssBox');
+ if(su)assAtual.outerHTML=`<img id="proofAssBox" class="proof-img" src="${esc(su)}" alt="Assinatura do recebedor">`;
+ else if(x.assinatura_path){assAtual.textContent='Não foi possível abrir a assinatura. Verifique a política de leitura do Storage.'}
+}
+function fecharComprovante(){document.getElementById('proofModal').classList.add('hidden');document.body.classList.remove('sig-open')}
+
 function esc(v=''){return String(v).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
 (async()=>{let {data}=await sb.auth.getSession();if(data.session)await iniciar(data.session.user)})();
 </script>
