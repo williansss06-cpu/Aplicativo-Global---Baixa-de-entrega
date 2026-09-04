@@ -157,7 +157,7 @@ async function entrar(){
  await iniciar(data.user);
 }
 async function iniciar(user){
- let {data,error}=await sb.from('profiles').select('*').eq('id',user.id).single();
+ let {data,error}=await sb.from('global_entrega_usuarios').select('*').eq('user_id',user.id).single();
  if(error||!data){loginStatus.textContent='Usuário autenticado, mas sem perfil cadastrado.';await sb.auth.signOut();return}
  if(data.ativo===false){loginStatus.textContent='Usuário inativo.';await sb.auth.signOut();return}
  perfil=data; login.classList.add('hidden');app.classList.remove('hidden');
@@ -169,7 +169,7 @@ async function sair(){await sb.auth.signOut();location.reload()}
 function show(id,btn){document.querySelectorAll('.page').forEach(x=>x.classList.add('hidden'));document.getElementById(id).classList.remove('hidden');document.querySelectorAll('.navbtn').forEach(x=>x.classList.remove('active'));if(btn)btn.classList.add('active');if(id==='entregas')carregarEntregas();if(id==='motoristas')carregarUsuarios();}
 async function carregarTudo(){await Promise.all([carregarEntregas(),carregarUsuarios()]);}
 async function carregarUsuarios(){
- let {data,error}=await sb.from('profiles').select('id,nome,email,perfil,ativo').order('nome');
+ let {data,error}=await sb.from('global_entrega_usuarios').select('user_id,nome,email,perfil,ativo').order('nome');
  if(error)return; listaUsuarios.innerHTML=(data||[]).map(x=>`<tr><td>${esc(x.nome)}</td><td>${esc(x.email)}</td><td>${esc(x.perfil)}</td><td><span class="badge ${x.ativo?'ok':'off'}">${x.ativo?'Ativo':'Inativo'}</span></td></tr>`).join('');
  kMot.textContent=(data||[]).filter(x=>x.perfil==='motorista'&&x.ativo).length;
 }
@@ -288,25 +288,25 @@ function preencherDanfe(raw){
 }
 function blob(data){let a=data.split(','),b=atob(a[1]),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return new Blob([u],{type:'image/png'})}
 function clean(x){return String(x).replace(/[^a-zA-Z0-9._-]/g,'_')}
-async function up(path,file){let {error}=await sb.storage.from('comprovantes-entrega').upload(path,file);if(error)throw error;return path}
+async function up(path,file){let {error}=await sb.storage.from('global-entregas').upload(path,file);if(error)throw error;return path}
 async function salvarEntrega(){
  try{
   if(!nf.value||!dest.value||!recNome.value||!pdf.files[0])throw Error('Preencha NF, destinatário, recebedor e PDF.');
   if(!assinou)throw Error('Colete a assinatura.');if(!aceite.checked)throw Error('Marque a confirmação.');
-  salvarBtn.disabled=true;saveStatus.textContent='Enviando arquivos...';let id=crypto.randomUUID(),base=`${perfil.id}/${id}`;
+  salvarBtn.disabled=true;saveStatus.textContent='Enviando arquivos...';let id=crypto.randomUUID(),base=`${perfil.user_id}/${id}`;
   let pdfPath=await up(`${base}/nota_${clean(pdf.files[0].name)}`,pdf.files[0]);let sigPath=await up(`${base}/assinatura.png`,blob(c.toDataURL()));
   let fotoPath=null;if(foto.files[0])fotoPath=await up(`${base}/foto_${clean(foto.files[0].name)}`,foto.files[0]);
-  let payload={id,motorista_id:perfil.id,nf_numero:nf.value,serie:serie.value||null,chave_acesso:chave.value||null,destinatario:dest.value,cidade:cidade.value||null,uf:uf.value.toUpperCase()||null,recebedor_nome:recNome.value,recebedor_documento:recDoc.value||null,recebedor_funcao:recFunc.value||null,observacoes:obs.value||null,data_entrega:data.value,hora_entrega:hora.value,latitude:coords?.lat||null,longitude:coords?.lng||null,precisao_gps:coords?.acc||null,pdf_path:pdfPath,assinatura_path:sigPath,foto_path:fotoPath};
-  let {error}=await sb.from('comprovantes_entrega').insert(payload);if(error)throw error;saveStatus.textContent='Entrega salva com sucesso.';alert('Comprovante salvo com sucesso.');await carregarEntregas();
+  let payload={id,user_id:perfil.user_id,numero_nf:nf.value,destinatario:dest.value,recebedor_nome:recNome.value,entregue_em:new Date(`${data.value}T${hora.value||'00:00'}`).toISOString(),pdf_path:pdfPath,assinatura_path:sigPath,foto_path:fotoPath,serie:serie.value||null,chave_acesso:chave.value||null,cidade:cidade.value||null,uf:uf.value.toUpperCase()||null,recebedor_documento:recDoc.value||null,recebedor_funcao:recFunc.value||null,observacoes:obs.value||null,latitude:coords?.lat||null,longitude:coords?.lng||null,precisao_gps:coords?.acc||null};
+  let {error}=await sb.from('global_entregas').insert(payload);if(error)throw error;saveStatus.textContent='Entrega salva com sucesso.';alert('Comprovante salvo com sucesso.');await carregarEntregas();
  }catch(e){saveStatus.textContent='Erro: '+e.message}finally{salvarBtn.disabled=false}
 }
 async function carregarEntregas(){
- let q=sb.from('comprovantes_entrega').select('*,profiles!comprovantes_entrega_motorista_id_fkey(nome)').order('created_at',{ascending:false});
- if(perfil?.perfil!=='admin')q=q.eq('motorista_id',perfil.id);let {data,error}=await q;if(error)return;entregasCache=data||[];renderEntregas();
- if(perfil?.perfil==='admin'){kEnt.textContent=entregasCache.length;let hoje=new Date().toISOString().slice(0,10);kHoje.textContent=entregasCache.filter(x=>x.data_entrega===hoje).length;kGps.textContent=entregasCache.filter(x=>x.latitude!=null).length;recentes.innerHTML=entregasCache.slice(0,8).map(row).join('')}
+ let q=sb.from('global_entregas').select('*').order('entregue_em',{ascending:false});
+ if(perfil?.perfil!=='admin')q=q.eq('user_id',perfil.user_id);let {data,error}=await q;if(error){console.error(error);return}entregasCache=data||[];renderEntregas();
+ if(perfil?.perfil==='admin'){kEnt.textContent=entregasCache.length;let hoje=new Date().toISOString().slice(0,10);kHoje.textContent=entregasCache.filter(x=>String(x.entregue_em||'').slice(0,10)===hoje).length;kGps.textContent=entregasCache.filter(x=>x.latitude!=null).length;recentes.innerHTML=entregasCache.slice(0,8).map(row).join('')}
 }
-function row(x){return `<tr><td>${esc(x.nf_numero)}</td><td>${esc(x.destinatario)}</td><td>${esc(x.profiles?.nome||'')}</td><td>${esc(x.data_entrega||'')}</td><td><span class="badge ok">Entregue</span></td></tr>`}
-function renderEntregas(){let s=(busca?.value||'').toLowerCase(),a=entregasCache.filter(x=>(x.nf_numero+' '+x.destinatario).toLowerCase().includes(s));listaEntregas.innerHTML=a.map(x=>`<tr><td>${esc(x.nf_numero)}</td><td>${esc(x.destinatario)}</td><td>${esc(x.recebedor_nome)}</td><td>${esc(x.profiles?.nome||perfil?.nome||'')}</td><td>${esc(x.data_entrega)} ${esc(x.hora_entrega)}</td></tr>`).join('')}
+function row(x){return `<tr><td>${esc(x.numero_nf)}</td><td>${esc(x.destinatario)}</td><td>${esc(x.motorista_nome||perfil?.nome||'')}</td><td>${esc(String(x.entregue_em||'').slice(0,10))}</td><td><span class="badge ok">Entregue</span></td></tr>`}
+function renderEntregas(){let s=(busca?.value||'').toLowerCase(),a=entregasCache.filter(x=>((x.numero_nf||'')+' '+(x.destinatario||'')).toLowerCase().includes(s));listaEntregas.innerHTML=a.map(x=>`<tr><td>${esc(x.numero_nf)}</td><td>${esc(x.destinatario)}</td><td>${esc(x.recebedor_nome)}</td><td>${esc(x.motorista_nome||perfil?.nome||'')}</td><td>${esc(x.entregue_em?new Date(x.entregue_em).toLocaleString('pt-BR'):'')}</td></tr>`).join('')}
 function esc(v=''){return String(v).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
 (async()=>{let {data}=await sb.auth.getSession();if(data.session)await iniciar(data.session.user)})();
 </script>
