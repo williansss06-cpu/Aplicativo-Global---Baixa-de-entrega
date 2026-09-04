@@ -420,13 +420,13 @@ async function salvarEntrega(){
   salvarBtn.disabled=true;saveStatus.textContent='Enviando arquivos...';let id=crypto.randomUUID(),base=`${perfil.user_id}/${id}`;
   let pdfPath=await up(`${base}/nota_${clean(pdf.files[0].name)}`,pdf.files[0]);let sigPath=await up(`${base}/assinatura.png`,blob(sigConfirmedData));
   let fotoPath=null;if(foto.files[0])fotoPath=await up(`${base}/foto_${clean(foto.files[0].name)}`,foto.files[0]);
-  let payload={id,user_id:perfil.user_id,numero_nf:nf.value,destinatario:dest.value,recebedor_nome:recNome.value,entregue_em:new Date(`${data.value}T${hora.value||'00:00'}`).toISOString(),pdf_path:pdfPath,assinatura_path:sigPath,foto_path:fotoPath,serie:serie.value||null,chave_acesso:chave.value||null,cidade:cidade.value||null,uf:uf.value.toUpperCase()||null,recebedor_documento:recDoc.value||null,recebedor_funcao:recFunc.value||null,observacoes:obs.value||null,latitude:coords?.lat||null,longitude:coords?.lng||null,precisao_gps:coords?.acc||null};
+  let payload={id,motorista_id:perfil.user_id,motorista_nome:perfil.nome||null,numero_nf:nf.value,destinatario:dest.value,recebedor_nome:recNome.value,entregue_em:new Date(`${data.value}T${hora.value||'00:00'}`).toISOString(),pdf_path:pdfPath,assinatura_path:sigPath,foto_path:fotoPath,serie:serie.value||null,chave_acesso:chave.value||null,cidade:cidade.value||null,uf:uf.value.toUpperCase()||null,recebedor_documento:recDoc.value||null,recebedor_funcao:recFunc.value||null,observacoes:obs.value||null,latitude:coords?.lat||null,longitude:coords?.lng||null,precisao_gps:coords?.acc||null,confirmado:true};
   let {error}=await sb.from('global_entregas').insert(payload);if(error)throw error;saveStatus.textContent='Entrega salva com sucesso.';alert('Comprovante salvo com sucesso.');await carregarEntregas();
  }catch(e){saveStatus.textContent='Erro: '+e.message}finally{salvarBtn.disabled=false}
 }
 async function carregarEntregas(){
  let q=sb.from('global_entregas').select('*').order('entregue_em',{ascending:false});
- if(perfil?.perfil!=='admin')q=q.eq('user_id',perfil.user_id);let {data,error}=await q;if(error){console.error(error);return}entregasCache=data||[];renderEntregas();
+ if(perfil?.perfil!=='admin')q=q.eq('motorista_id',perfil.user_id);let {data,error}=await q;if(error){console.error(error);return}entregasCache=data||[];renderEntregas();
  if(perfil?.perfil==='admin'){kEnt.textContent=entregasCache.length;let hoje=new Date().toISOString().slice(0,10);kHoje.textContent=entregasCache.filter(x=>String(x.entregue_em||'').slice(0,10)===hoje).length;kGps.textContent=entregasCache.filter(x=>x.latitude!=null).length;recentes.innerHTML=entregasCache.slice(0,8).map(row).join('')}
 }
 function row(x){return `<tr><td>${esc(x.numero_nf)}</td><td>${esc(x.destinatario)}</td><td>${esc(x.motorista_nome||perfil?.nome||'')}</td><td>${esc(String(x.entregue_em||'').slice(0,10))}</td><td><span class="badge ok">Entregue</span></td></tr>`}
