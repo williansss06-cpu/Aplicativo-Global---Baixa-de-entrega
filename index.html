@@ -4,6 +4,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Global Acessórios | Comprovante de Entrega</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs" type="module"></script>
 <style>
 :root{--orange:#f58220;--black:#0b0d0f;--dark:#15191d;--card:#1b2025;--line:#313840;--white:#fff;--muted:#aab2bb;--green:#25a55f;--red:#d84a4a;--bg:#f5f6f7}
 *{box-sizing:border-box} body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:#172033}
@@ -150,7 +151,75 @@ function gps(){gpsStatus.textContent='Capturando...';navigator.geolocation.getCu
 const c=document.getElementById('sig'),cx=c.getContext('2d');function size(){let r=c.getBoundingClientRect(),d=devicePixelRatio||1;c.width=r.width*d;c.height=220*d;cx.setTransform(d,0,0,d,0,0);cx.lineWidth=2.2;cx.lineCap='round'}setTimeout(size,200);let drawing=false;
 function pt(e){let r=c.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}}c.onpointerdown=e=>{drawing=true;let p=pt(e);cx.beginPath();cx.moveTo(p.x,p.y);c.setPointerCapture(e.pointerId)};c.onpointermove=e=>{if(!drawing)return;let p=pt(e);cx.lineTo(p.x,p.y);cx.stroke();assinou=true};c.onpointerup=()=>drawing=false;function limpar(){cx.clearRect(0,0,c.width,c.height);assinou=false}
 let now=new Date();data.value=now.toISOString().slice(0,10);hora.value=now.toTimeString().slice(0,5);
-pdf.onchange=()=>pdfNome.textContent=pdf.files[0]?pdf.files[0].name:'Selecione o DANFE em PDF.';
+
+pdf.onchange=async()=>{
+  const file=pdf.files[0];
+  pdfNome.textContent=file?file.name:'Selecione o DANFE em PDF.';
+  if(!file)return;
+  saveStatus.textContent='Lendo dados da Nota Fiscal...';
+  try{
+    const pdfjsLib=await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs');
+    pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
+    const bytes=new Uint8Array(await file.arrayBuffer());
+    const doc=await pdfjsLib.getDocument({data:bytes}).promise;
+    let text='';
+    for(let i=1;i<=doc.numPages;i++){
+      const page=await doc.getPage(i);
+      const tc=await page.getTextContent();
+      text += '\n' + tc.items.map(x=>x.str).join(' ');
+    }
+    preencherDanfe(text);
+    saveStatus.textContent='PDF lido. Confira os dados preenchidos automaticamente.';
+  }catch(e){
+    console.error(e);
+    saveStatus.textContent='PDF anexado, mas não foi possível ler automaticamente. Preencha os dados manualmente.';
+  }
+};
+
+function preencherDanfe(raw){
+  const t=String(raw||'').replace(/\s+/g,' ').trim();
+  const digits=t.replace(/\D/g,'');
+  const set=(el,val)=>{ if(val && !el.value) el.value=String(val).trim(); };
+
+  // Chave NF-e: procura sequência de 44 dígitos, inclusive quando o PDF separa em blocos.
+  let chaveMatch=t.match(/(?:\d[\s.]*){44}/);
+  let chaveVal=chaveMatch ? chaveMatch[0].replace(/\D/g,'') : '';
+  if(chaveVal.length!==44){
+    const candidates=digits.match(/\d{44}/g)||[];
+    chaveVal=candidates.find(x=>x.startsWith('35'))||candidates[0]||'';
+  }
+  set(chave,chaveVal);
+
+  // Número e série próximos aos rótulos DANFE.
+  let m=t.match(/N[º°o]?\s*(?:da\s*)?NF-?e?\s*[:\-]?\s*0*([0-9]{1,9})/i)
+      || t.match(/N[º°]\s*0*([0-9]{1,9})\s+S[ée]rie/i);
+  if(m)set(nf,m[1].padStart(6,'0'));
+
+  m=t.match(/S[ée]rie\s*[:\-]?\s*0*([0-9]{1,3})/i);
+  if(m)set(serie,m[1]);
+
+  // Destinatário: captura após Nome/Razão Social e antes de CNPJ/CPF.
+  m=t.match(/Destinat[aá]rio\/Remetente.*?Nome\s*\/?\s*Raz[aã]o\s*Social\s+(.+?)\s+CNPJ\/CPF/i)
+    || t.match(/Nome\s*\/?\s*Raz[aã]o\s*Social\s+(.+?)\s+CNPJ\/CPF/i);
+  if(m)set(dest,m[1]);
+
+  // Município e UF no bloco do destinatário.
+  m=t.match(/Munic[ií]pio\s+([A-Za-zÀ-ÿ .'-]+?)\s+UF\s+([A-Z]{2})\b/i);
+  if(m){ set(cidade,m[1]); set(uf,m[2].toUpperCase()); }
+
+  // Fallback para cidade/UF quando os tokens saem em outra ordem.
+  if(!uf.value){
+    const mu=t.match(/\bUF\s+([A-Z]{2})\b/);
+    if(mu)set(uf,mu[1]);
+  }
+
+  // Se o número não foi encontrado no texto, tenta extrair da chave:
+  // posições 26-34 da chave NF-e = número do documento (9 dígitos).
+  if(!nf.value && chaveVal.length===44){
+    const n=chaveVal.substring(25,34).replace(/^0+/,'');
+    if(n)set(nf,n.padStart(6,'0'));
+  }
+}
 function blob(data){let a=data.split(','),b=atob(a[1]),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return new Blob([u],{type:'image/png'})}
 function clean(x){return String(x).replace(/[^a-zA-Z0-9._-]/g,'_')}
 async function up(path,file){let {error}=await sb.storage.from('comprovantes-entrega').upload(path,file);if(error)throw error;return path}
