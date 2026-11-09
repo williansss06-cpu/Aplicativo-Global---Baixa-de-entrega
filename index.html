@@ -112,6 +112,8 @@ body.sig-open{overflow:hidden;touch-action:none}
 @media(max-width:700px){.proof-grid,.proof-info{grid-template-columns:1fr}.proof-dialog{padding:12px}}
 
 </style>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 </head>
 <body>
 <section id="login" class="login">
@@ -175,6 +177,18 @@ body.sig-open{overflow:hidden;touch-action:none}
  <div class="panel"><h2 id="finalizacaoTitulo">5. Finalização</h2><label style="font-weight:normal"><input id="aceite" type="checkbox" style="width:auto"> Confirmo o recebimento da mercadoria conforme informações e ressalvas acima.</label><button id="salvarBtn" class="btn orange full" onclick="salvarEntrega()">Finalizar e salvar entrega</button><div id="saveStatus" class="status">Aguardando preenchimento.</div></div>
 </section>
 
+<section id="rotaIntegrada" class="page hidden">
+ <h1>Rota da entrega</h1><div class="sub" id="rotaResumo">Carregando destino...</div>
+ <div class="panel">
+  <div id="mapaInterno" style="height:min(62vh,540px);min-height:300px;border-radius:12px;overflow:hidden;background:#e9edf0"></div>
+  <p id="rotaAviso" role="status" style="font-size:13px;color:#4b5563">Obtendo sua localização...</p>
+  <div style="display:flex;gap:10px;flex-wrap:wrap">
+   <button class="btn orange" type="button" onclick="baixarEntregaDaRota()">Realizar baixa</button>
+   <button class="btn darkbtn" type="button" onclick="abrirNavegadorExterno()">Navegar no Google Maps</button>
+   <button class="btn darkbtn" type="button" onclick="fecharRota()">Voltar às entregas</button>
+  </div>
+ </div>
+</section>
 <section id="entregas" class="page hidden">
  <h1>Entregas</h1><div class="sub">Histórico de comprovantes</div>
  <div class="panel"><input id="busca" placeholder="Buscar por NF ou destinatário..." oninput="renderEntregas()"><div style="overflow:auto;margin-top:12px"><table><thead><tr><th>NF</th><th>Destinatário</th><th>Recebedor</th><th>Motorista</th><th>Data/Hora</th><th>Status / Ação</th><th>Comprovante</th></tr></thead><tbody id="listaEntregas"></tbody></table></div></div>
@@ -238,7 +252,7 @@ async function iniciar(user){
  if(data.perfil==='admin'){show('dashboard');await carregarTudo()}else{show('entregas');await carregarEntregas()}
 }
 async function sair(){await sb.auth.signOut();location.reload()}
-function show(id,btn){document.querySelectorAll('.page').forEach(x=>x.classList.add('hidden'));document.getElementById(id).classList.remove('hidden');document.querySelectorAll('.navbtn').forEach(x=>x.classList.remove('active'));if(btn)btn.classList.add('active');if(id==='entregas')carregarEntregas();if(id==='motoristas')carregarUsuarios();if(id==='nova' && (perfil?.perfil==='admin'||!entregaEmBaixa))prepararNovaEntrega();}
+function show(id,btn){document.querySelectorAll('.page').forEach(x=>x.classList.add('hidden'));document.getElementById(id).classList.remove('hidden');document.querySelectorAll('.navbtn').forEach(x=>x.classList.remove('active'));if(btn)btn.classList.add('active');if(id!=='rotaIntegrada'&&rotaAtual){pararGPS();rotaAtual=null}if(id==='entregas')carregarEntregas();if(id==='motoristas')carregarUsuarios();if(id==='nova' && (perfil?.perfil==='admin'||!entregaEmBaixa))prepararNovaEntrega();}
 async function carregarTudo(){await Promise.all([carregarEntregas(),carregarUsuarios()]);}
 async function carregarUsuarios(){
  let {data,error}=await sb.from('global_entrega_usuarios').select('user_id,nome,email,perfil,ativo').order('nome');
@@ -538,14 +552,58 @@ async function carregarEntregas(){
 }
 function proofButton(x){return x.status==='entregue'||x.confirmado? `<button type="button" class="comprov-btn" onclick="abrirComprovante('${esc(x.id)}')">Ver foto / assinatura</button>`:'Aguardando baixa'}
 function statusEntrega(x){return x.status||(x.confirmado?'entregue':'pendente')}
-function abrirRotaEntrega(id){
- const x=entregasCache.find(e=>String(e.id)===String(id));
- if(!x|| (perfil?.perfil==='motorista'&&x.motorista_id!==perfil.user_id))return;
- if(!x.endereco_entrega){alert('Endereço completo não cadastrado. Solicite ao administrador antes de iniciar a viagem.');return;}
- const destino=[x.endereco_entrega,x.cidade,x.uf,'Brasil'].filter(Boolean).join(', ');
+let rotaAtual=null,mapaLeaflet=null,linhaRota=null,marcadorMotorista=null,marcadorDestino=null,gpsWatch=null,rotaUltimoCalculo=0,rotaUltimaPos=null;
+function mensagemRota(m){document.getElementById('rotaAviso').textContent=m}
+function pararGPS(){if(gpsWatch!==null&&navigator.geolocation){navigator.geolocation.clearWatch(gpsWatch);gpsWatch=null}}
+function fecharRota(){pararGPS();rotaAtual=null;show('entregas')}
+function baixarEntregaDaRota(){if(!rotaAtual)return;const id=rotaAtual.id;pararGPS();rotaAtual=null;iniciarBaixa(id)}
+function abrirNavegadorExterno(){
+ if(!rotaAtual)return;
+ const destino=[rotaAtual.endereco_entrega,rotaAtual.cidade,rotaAtual.uf,'Brasil'].filter(Boolean).join(', ');
  window.open('https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(destino)+'&travelmode=driving','_blank','noopener,noreferrer');
 }
-function botaoMapa(x){return x.endereco_entrega?` <button type="button" class="btn darkbtn" onclick="abrirRotaEntrega('${esc(x.id)}')">📍 Abrir Maps</button>`:''}
+async function abrirRotaEntrega(id){
+ const x=entregasCache.find(e=>String(e.id)===String(id));
+ if(!x||perfil?.perfil!=='motorista'||x.motorista_id!==perfil.user_id||statusEntrega(x)==='entregue')return;
+ if(!x.endereco_entrega){alert('Endereço não cadastrado. Solicite ao administrador.');return}
+ pararGPS();rotaAtual=x;show('rotaIntegrada');
+ document.getElementById('rotaResumo').textContent='NF '+(x.numero_nf||'')+' — '+[x.endereco_entrega,x.cidade,x.uf].filter(Boolean).join(', ');
+ mensagemRota('Localizando destino e aguardando autorização de GPS...');
+ if(!window.L){mensagemRota('Mapa indisponível neste momento. Use a opção Google Maps.');return}
+ if(!mapaLeaflet){mapaLeaflet=L.map('mapaInterno').setView([-23.45,-46.6],10);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(mapaLeaflet)}
+ if(linhaRota){mapaLeaflet.removeLayer(linhaRota);linhaRota=null}
+ if(marcadorMotorista){mapaLeaflet.removeLayer(marcadorMotorista);marcadorMotorista=null}
+ if(marcadorDestino){mapaLeaflet.removeLayer(marcadorDestino);marcadorDestino=null}
+ setTimeout(()=>mapaLeaflet.invalidateSize(),100);
+ const idAtual=x.id;
+ try{
+  const busca=[x.endereco_entrega,x.cidade,x.uf,'Brasil'].filter(Boolean).join(', ');
+  const resp=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(busca),{headers:{'Accept':'application/json'}});
+  if(!resp.ok)throw Error('Serviço de localização indisponível');
+  const lugares=await resp.json();
+  if(!rotaAtual||rotaAtual.id!==idAtual)return;
+  if(!lugares.length){mensagemRota('Endereço não localizado automaticamente. Confira com o responsável ou abra no Google Maps.');return}
+  const destino=[Number(lugares[0].lat),Number(lugares[0].lon)];
+  marcadorDestino=L.marker(destino).addTo(mapaLeaflet).bindPopup('Destino: '+(x.destinatario||'Entrega'));
+  mapaLeaflet.setView(destino,14);
+  mensagemRota('Destino estimado no mapa. Confirme o ponto antes de viajar. Aguardando GPS...');
+  if(!navigator.geolocation){mensagemRota('GPS indisponível. Use a navegação externa.');return}
+  gpsWatch=navigator.geolocation.watchPosition(p=>{
+   if(!rotaAtual||rotaAtual.id!==idAtual)return;
+   const origem=[p.coords.latitude,p.coords.longitude];
+   if(!marcadorMotorista)marcadorMotorista=L.circleMarker(origem,{radius:9,color:'#155eef',fillColor:'#155eef',fillOpacity:.9}).addTo(mapaLeaflet).bindPopup('Sua posição');
+   else marcadorMotorista.setLatLng(origem);
+   const now=Date.now();
+   if(now-rotaUltimoCalculo<60000&&rotaUltimaPos&&mapaLeaflet.distance(rotaUltimaPos,origem)<250)return;
+   rotaUltimoCalculo=now;rotaUltimaPos=origem;
+   fetch('https://router.project-osrm.org/route/v1/driving/'+origem[1]+','+origem[0]+';'+destino[1]+','+destino[0]+'?overview=full&geometries=geojson')
+    .then(r=>{if(!r.ok)throw Error('Rota indisponível');return r.json()})
+    .then(j=>{if(!rotaAtual||rotaAtual.id!==idAtual)return;if(!j.routes?.length)throw Error('Sem rota');const rt=j.routes[0];if(linhaRota)mapaLeaflet.removeLayer(linhaRota);linhaRota=L.geoJSON(rt.geometry,{style:{color:'#f58220',weight:5}}).addTo(mapaLeaflet);mapaLeaflet.fitBounds(linhaRota.getBounds(),{padding:[25,25]});mensagemRota('Trajeto aproximado: '+(rt.distance/1000).toFixed(1)+' km. Mapa informativo, sem instruções de voz ou trânsito em tempo real. Confirme o destino.')})
+    .catch(()=>mensagemRota('GPS ativo, mas não foi possível calcular o trajeto. Use Google Maps para navegação.'));
+  },e=>mensagemRota('GPS não disponível: '+e.message+'. Você pode abrir o Google Maps.'),{enableHighAccuracy:true,maximumAge:10000,timeout:20000});
+ }catch(e){mensagemRota('Não foi possível localizar o destino no mapa integrado. '+e.message+'. Use Google Maps.')}
+}
+function botaoMapa(x){return x.endereco_entrega?` <button type="button" class="btn darkbtn" onclick="abrirRotaEntrega('${esc(x.id)}')">📍 Iniciar rota</button>`:''}
 function statusAcao(x){
  const st=statusEntrega(x);
  return `<span class="badge ${st==='entregue'?'ok':'off'}">${esc(st)}</span>`+(perfil?.perfil==='motorista'&&st!=='entregue'?` <button class="btn orange" onclick="iniciarBaixa('${esc(x.id)}')">Realizar baixa</button>${botaoMapa(x)}`:'');
