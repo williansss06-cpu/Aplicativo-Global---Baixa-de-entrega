@@ -593,7 +593,7 @@ async function abrirRotaEntrega(id){
   const {data:geo,error:geoError}=await sb.functions.invoke('global-geocodificar-entrega',{body:{entrega_id:idAtual}});
   if(!rotaAtual||rotaAtual.id!==idAtual)return;
   if(geoError||!geo||!Number.isFinite(Number(geo.latitude))||!Number.isFinite(Number(geo.longitude))){
-   mensagemRota('Não foi possível localizar o destino pelo Google. Confira o endereço ou utilize Google Maps.');
+   mensagemRota('Endereço não localizado. Confira o endereço cadastrado e tente novamente. O botão Google Maps permanece disponível.');
    return;
   }
   const destino=[Number(geo.latitude),Number(geo.longitude)];
@@ -612,7 +612,7 @@ async function abrirRotaEntrega(id){
    rotaUltimoCalculo=now;rotaUltimaPos=origem;
    fetch('https://router.project-osrm.org/route/v1/driving/'+origem[1]+','+origem[0]+';'+destino[1]+','+destino[0]+'?overview=full&geometries=geojson')
     .then(r=>{if(!r.ok)throw Error('Rota indisponível');return r.json()})
-    .then(j=>{if(!rotaAtual||rotaAtual.id!==idAtual)return;if(!j.routes?.length)throw Error('Sem rota');const rt=j.routes[0];if(linhaRota)mapaLeaflet.removeLayer(linhaRota);linhaRota=L.geoJSON(rt.geometry,{style:{color:'#f58220',weight:5}}).addTo(mapaLeaflet);mapaLeaflet.fitBounds(linhaRota.getBounds(),{padding:[25,25]});mensagemRota('Trajeto aproximado: '+(rt.distance/1000).toFixed(1)+' km. Mapa informativo, sem instruções de voz ou trânsito em tempo real. Confirme o destino.')})
+    .then(j=>{if(!rotaAtual||rotaAtual.id!==idAtual)return;if(!j.routes?.length)throw Error('Sem rota');const rt=j.routes[0];if(linhaRota)mapaLeaflet.removeLayer(linhaRota);linhaRota=L.geoJSON(rt.geometry,{style:{color:'#1769ff',weight:6,opacity:.95}}).addTo(mapaLeaflet);mapaLeaflet.fitBounds(linhaRota.getBounds(),{padding:[25,25]});mensagemRota('Trajeto aproximado: '+(rt.distance/1000).toFixed(1)+' km. Mapa informativo, sem instruções de voz ou trânsito em tempo real. Confirme o destino.')})
     .catch(()=>mensagemRota('GPS ativo, mas não foi possível calcular o trajeto. Use Google Maps para navegação.'));
   },e=>mensagemRota('GPS não disponível: '+e.message+'. Você pode abrir o Google Maps.'),{enableHighAccuracy:true,maximumAge:10000,timeout:20000});
  }catch(e){mensagemRota('Não foi possível localizar o destino no mapa integrado. '+e.message+'. Use Google Maps.')}
