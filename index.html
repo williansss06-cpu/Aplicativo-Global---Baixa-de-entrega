@@ -577,16 +577,17 @@ async function abrirRotaEntrega(id){
  setTimeout(()=>mapaLeaflet.invalidateSize(),100);
  const idAtual=x.id;
  try{
-  const busca=[x.endereco_entrega,x.cidade,x.uf,'Brasil'].filter(Boolean).join(', ');
-  const resp=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(busca),{headers:{'Accept':'application/json'}});
-  if(!resp.ok)throw Error('Serviço de localização indisponível');
-  const lugares=await resp.json();
+  const {data:geo,error:geoError}=await sb.functions.invoke('global-geocodificar-entrega',{body:{entrega_id:idAtual}});
   if(!rotaAtual||rotaAtual.id!==idAtual)return;
-  if(!lugares.length){mensagemRota('Endereço não localizado automaticamente. Confira com o responsável ou abra no Google Maps.');return}
-  const destino=[Number(lugares[0].lat),Number(lugares[0].lon)];
+  if(geoError||!geo||!Number.isFinite(Number(geo.latitude))||!Number.isFinite(Number(geo.longitude))){
+   mensagemRota('Não foi possível localizar o destino pelo Google. Confira o endereço ou utilize Google Maps.');
+   return;
+  }
+  const destino=[Number(geo.latitude),Number(geo.longitude)];
+  if(geo.precisao==='APPROXIMATE'||geo.precisao==='GEOMETRIC_CENTER')mensagemRota('Localização aproximada: confirme o endereço antes de viajar.');
   marcadorDestino=L.marker(destino).addTo(mapaLeaflet).bindPopup('Destino: '+(x.destinatario||'Entrega'));
   mapaLeaflet.setView(destino,14);
-  mensagemRota('Destino estimado no mapa. Confirme o ponto antes de viajar. Aguardando GPS...');
+  mensagemRota('Destino localizado pelo Google. Confirme o ponto antes de viajar. Aguardando GPS...');
   if(!navigator.geolocation){mensagemRota('GPS indisponível. Use a navegação externa.');return}
   gpsWatch=navigator.geolocation.watchPosition(p=>{
    if(!rotaAtual||rotaAtual.id!==idAtual)return;
