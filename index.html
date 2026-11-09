@@ -390,7 +390,7 @@ pdf.onchange=async()=>{
       text += '\n' + tc.items.map(x=>x.str).join(' ');
     }
     preencherDanfe(text);
-    saveStatus.textContent='PDF lido. Confira os dados preenchidos automaticamente.';
+    if(enderecoEntrega.value)saveStatus.textContent='PDF lido. Confira o endereço de entrega e os demais dados.';
   }catch(e){
     console.error(e);
     saveStatus.textContent='PDF anexado, mas não foi possível ler automaticamente. Preencha os dados manualmente.';
@@ -424,16 +424,37 @@ function preencherDanfe(raw){
     || t.match(/Nome\s*\/?\s*Raz[aã]o\s*Social\s+(.+?)\s+CNPJ\/CPF/i);
   if(m)set(dest,m[1]);
 
-  // Município e UF no bloco do destinatário.
-  m=t.match(/Munic[ií]pio\s+([A-Za-zÀ-ÿ .'-]+?)\s+UF\s+([A-Z]{2})\b/i);
-  if(m){ set(cidade,m[1]); set(uf,m[2].toUpperCase()); }
-
-  // Fallback para cidade/UF quando os tokens saem em outra ordem.
-  if(!uf.value){
-    const mu=t.match(/\bUF\s+([A-Z]{2})\b/);
-    if(mu)set(uf,mu[1]);
+  // Endereço de entrega explícito prevalece sobre o endereço cadastral.
+  // Restringe a busca ao trecho relevante para não capturar o endereço do emitente.
+  const cut=(start,ends)=>{const at=t.search(start);if(at<0)return '';let part=t.slice(at);const e=part.slice(12).search(ends);return e>=0?part.slice(0,e+12):part.slice(0,650)};
+  const blocoEntrega=cut(/(?:LOCAL\s+(?:DE\s+)?ENTREGA|ENDERE[CÇ]O\s+(?:DE\s+)?ENTREGA|DADOS\s+(?:DA\s+)?ENTREGA)/i,/(?:TRANSPORTADOR|C[AÁ]LCULO\s+DO\s+IMPOSTO|DADOS\s+DO\s+PRODUTO|INFORMA[CÇ][OÕ]ES\s+COMPLEMENTARES)/i);
+  const blocoDest=cut(/DESTINAT[AÁ]RIO\s*\/\s*REMETENTE/i,/(?:FATURA|C[AÁ]LCULO\s+DO\s+IMPOSTO|TRANSPORTADOR|DADOS\s+DO\s+PRODUTO)/i);
+  const extrairEndereco=(bloco)=>{
+    if(!bloco)return null;
+    const get=(re)=>{const m=bloco.match(re);return m?m[1].trim():''};
+    let log=get(/(?:ENDERE[CÇ]O|LOGRADOURO)\s*[:\-]?\s*(.+?)(?=\s+(?:BAIRRO|DISTRITO|CEP|MUNIC[IÍ]PIO|CIDADE|UF|CNPJ|CPF|INSCRI[CÇ][AÃ]O)\b|$)/i);
+    let bairro=get(/(?:BAIRRO\s*\/?\s*DISTRITO|BAIRRO)\s*[:\-]?\s*(.+?)(?=\s+(?:CEP|MUNIC[IÍ]PIO|CIDADE|UF|CNPJ|CPF|FONE)\b|$)/i);
+    let cep=get(/\bCEP\s*[:\-]?\s*(\d{5}[-.]?\d{3})/i);
+    let municipio=get(/(?:MUNIC[IÍ]PIO|CIDADE)\s*[:\-]?\s*([A-Za-zÀ-ÿ .'-]+?)(?=\s+(?:UF|FONE|CEP|INSCRI[CÇ][AÃ]O|CNPJ|CPF)\b|$)/i);
+    let estado=get(/\bUF\s*[:\-]?\s*([A-Z]{2})\b/i);
+    // Alguns DANFEs apresentam os valores em sequência sem o rótulo de endereço.
+    if(!log){const m=bloco.match(/\b((?:RUA|AVENIDA|AV\.?|ESTRADA|RODOVIA|ALAMEDA|TRAVESSA|PRA[CÇ]A)\s+.{5,130}?)(?=\s+(?:BAIRRO|CEP|MUNIC[IÍ]PIO|CIDADE|UF)\b|$)/i);if(m)log=m[1].trim()}
+    if(!log)return null;
+    return {log,bairro,cep,municipio,estado};
+  };
+  const end=extrairEndereco(blocoEntrega)||extrairEndereco(blocoDest);
+  if(end){
+    set(enderecoEntrega,[end.log,end.bairro,end.cep].filter(Boolean).join(', '));
+    set(cidade,end.municipio);set(uf,end.estado.toUpperCase());
   }
-
+  // Fallback restrito ao destinatário; nunca utilizar UF do emitente.
+  if(!cidade.value||!uf.value){
+    const m=blocoDest.match(/Munic[ií]pio\s+([A-Za-zÀ-ÿ .'-]+?)\s+UF\s+([A-Z]{2})\b/i);
+    if(m){set(cidade,m[1]);set(uf,m[2].toUpperCase())}
+  }
+  if(!enderecoEntrega.value){
+    saveStatus.textContent='PDF lido, mas o endereço completo não foi identificado. Confira e preencha antes de programar.';
+  }
   // Se o número não foi encontrado no texto, tenta extrair da chave:
   // posições 26-34 da chave NF-e = número do documento (9 dígitos).
   if(!nf.value && chaveVal.length===44){
