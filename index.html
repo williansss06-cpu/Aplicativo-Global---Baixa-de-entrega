@@ -151,33 +151,33 @@ body.sig-open{overflow:hidden;touch-action:none}
 
 <section id="nova" class="page hidden">
  <h1>Nova Entrega</h1><div class="sub">Comprovante digital de recebimento</div>
- <div class="panel"><h2>1. Nota Fiscal</h2>
+ <div class="panel"><h2>1. Nota Fiscal</h2><div id="programacaoMotorista" class="hidden"><label>Motorista responsável *</label><select id="motoristaSelecionado"><option value="">Selecione o motorista</option></select><div class="status">A entrega será disponibilizada automaticamente ao motorista selecionado.</div></div>
   <label>PDF da Nota Fiscal *</label><div class="upload"><input id="pdf" type="file" accept="application/pdf,.pdf"><small id="pdfNome">Selecione o DANFE em PDF.</small></div>
   <div class="grid3"><div><label>Nº NF *</label><input id="nf"></div><div><label>Série</label><input id="serie"></div><div><label>Chave de acesso</label><input id="chave"></div></div>
   <label>Destinatário *</label><input id="dest">
   <div class="grid2"><div><label>Cidade</label><input id="cidade"></div><div><label>UF</label><input id="uf" maxlength="2"></div></div>
  </div>
- <div class="panel"><h2>2. Recebedor</h2><div class="grid2"><div><label>Nome *</label><input id="recNome"></div><div><label>CPF/Documento</label><input id="recDoc"></div></div><label>Função/Setor</label><input id="recFunc"><label>Observações / ressalvas</label><textarea id="obs"></textarea></div>
- <div class="panel"><h2>3. Evidências</h2><div class="grid2"><div><label>Data</label><input id="data" type="date"></div><div><label>Hora</label><input id="hora" type="time"></div></div>
+ <div class="panel baixa-only"><h2>2. Recebedor</h2><div class="grid2"><div><label>Nome *</label><input id="recNome"></div><div><label>CPF/Documento</label><input id="recDoc"></div></div><label>Função/Setor</label><input id="recFunc"><label>Observações / ressalvas</label><textarea id="obs"></textarea></div>
+ <div class="panel baixa-only"><h2>3. Evidências</h2><div class="grid2"><div><label>Data</label><input id="data" type="date"></div><div><label>Hora</label><input id="hora" type="time"></div></div>
   <label>GPS</label><div class="actions"><button class="btn ghost" onclick="gps()">📍 Capturar localização</button></div><div id="gpsStatus" class="status">Não capturado.</div>
   <label>Foto da entrega</label>
 <input id="foto" class="camera-input" type="file" accept="image/*" capture="environment">
 <label for="foto" class="camera-btn"><span class="icon">📷</span><span>Abrir câmera do celular</span></label>
 <img id="fotoPreview" alt="Prévia da foto">
  </div>
- <div class="panel"><h2>4. Assinatura</h2><div class="sub">O recebedor assina com o dedo.</div>
+ <div class="panel baixa-only"><h2>4. Assinatura</h2><div class="sub">O recebedor assina com o dedo.</div>
   <div class="sig-summary">
     <button type="button" class="btn darkbtn full" onclick="abrirAssinatura()">✍️ Coletar assinatura</button>
     <img id="sigPreview" class="sig-preview" alt="Prévia da assinatura">
     <div id="sigStatus" class="status">Assinatura ainda não coletada.</div>
   </div>
  </div>
- <div class="panel"><h2>5. Finalização</h2><label style="font-weight:normal"><input id="aceite" type="checkbox" style="width:auto"> Confirmo o recebimento da mercadoria conforme informações e ressalvas acima.</label><button id="salvarBtn" class="btn orange full" onclick="salvarEntrega()">Finalizar e salvar entrega</button><div id="saveStatus" class="status">Aguardando preenchimento.</div></div>
+ <div class="panel"><h2 id="finalizacaoTitulo">5. Finalização</h2><label style="font-weight:normal"><input id="aceite" type="checkbox" style="width:auto"> Confirmo o recebimento da mercadoria conforme informações e ressalvas acima.</label><button id="salvarBtn" class="btn orange full" onclick="salvarEntrega()">Finalizar e salvar entrega</button><div id="saveStatus" class="status">Aguardando preenchimento.</div></div>
 </section>
 
 <section id="entregas" class="page hidden">
  <h1>Entregas</h1><div class="sub">Histórico de comprovantes</div>
- <div class="panel"><input id="busca" placeholder="Buscar por NF ou destinatário..." oninput="renderEntregas()"><div style="overflow:auto;margin-top:12px"><table><thead><tr><th>NF</th><th>Destinatário</th><th>Recebedor</th><th>Motorista</th><th>Data/Hora</th><th>Comprovante</th></tr></thead><tbody id="listaEntregas"></tbody></table></div></div>
+ <div class="panel"><input id="busca" placeholder="Buscar por NF ou destinatário..." oninput="renderEntregas()"><div style="overflow:auto;margin-top:12px"><table><thead><tr><th>NF</th><th>Destinatário</th><th>Recebedor</th><th>Motorista</th><th>Data/Hora</th><th>Status / Ação</th><th>Comprovante</th></tr></thead><tbody id="listaEntregas"></tbody></table></div></div>
 </section>
 
 <section id="config" class="page hidden">
@@ -219,7 +219,7 @@ body.sig-open{overflow:hidden;touch-action:none}
 <script>
 const SB_URL='https://gdlgceoliupjinkgunxe.supabase.co', SB_KEY='sb_publishable_CG8-Cflr7Wk0QyMJJyKwdw_GmYQ3FFn';
 const sb=supabase.createClient(SB_URL,SB_KEY);
-let perfil=null, coords=null, assinou=false, entregasCache=[];
+let perfil=null, coords=null, assinou=false, entregasCache=[], entregaEmBaixa=null, motoristasCache=[];
 
 async function entrar(){
  let e=loginEmail.value.trim(),p=loginSenha.value;
@@ -235,14 +235,14 @@ async function iniciar(user){
  perfil=data; login.classList.add('hidden');app.classList.remove('hidden');
  nomeTopo.textContent=data.nome||user.email;perfilTopo.textContent=(data.perfil||'motorista').toUpperCase();
  document.querySelectorAll('.adm').forEach(x=>x.classList.toggle('hidden',data.perfil!=='admin'));
- if(data.perfil==='admin'){show('dashboard');await carregarTudo()}else{show('nova');await carregarEntregas()}
+ if(data.perfil==='admin'){show('dashboard');await carregarTudo()}else{show('entregas');await carregarEntregas()}
 }
 async function sair(){await sb.auth.signOut();location.reload()}
-function show(id,btn){document.querySelectorAll('.page').forEach(x=>x.classList.add('hidden'));document.getElementById(id).classList.remove('hidden');document.querySelectorAll('.navbtn').forEach(x=>x.classList.remove('active'));if(btn)btn.classList.add('active');if(id==='entregas')carregarEntregas();if(id==='motoristas')carregarUsuarios();}
+function show(id,btn){document.querySelectorAll('.page').forEach(x=>x.classList.add('hidden'));document.getElementById(id).classList.remove('hidden');document.querySelectorAll('.navbtn').forEach(x=>x.classList.remove('active'));if(btn)btn.classList.add('active');if(id==='entregas')carregarEntregas();if(id==='motoristas')carregarUsuarios();if(id==='nova' && (perfil?.perfil==='admin'||!entregaEmBaixa))prepararNovaEntrega();}
 async function carregarTudo(){await Promise.all([carregarEntregas(),carregarUsuarios()]);}
 async function carregarUsuarios(){
  let {data,error}=await sb.from('global_entrega_usuarios').select('user_id,nome,email,perfil,ativo').order('nome');
- if(error)return; listaUsuarios.innerHTML=(data||[]).map(x=>`<tr><td>${esc(x.nome)}</td><td>${esc(x.email)}</td><td>${esc(x.perfil)}</td><td><span class="badge ${x.ativo?'ok':'off'}">${x.ativo?'Ativo':'Inativo'}</span></td></tr>`).join('');
+ if(error)return; motoristasCache=(data||[]).filter(x=>x.perfil==='motorista'&&x.ativo);const sel=document.getElementById('motoristaSelecionado');sel.innerHTML='<option value="">Selecione o motorista</option>'+motoristasCache.map(x=>`<option value="${esc(x.user_id)}">${esc(x.nome||x.email)}</option>`).join(''); listaUsuarios.innerHTML=(data||[]).map(x=>`<tr><td>${esc(x.nome)}</td><td>${esc(x.email)}</td><td>${esc(x.perfil)}</td><td><span class="badge ${x.ativo?'ok':'off'}">${x.ativo?'Ativo':'Inativo'}</span></td></tr>`).join('');
  kMot.textContent=(data||[]).filter(x=>x.perfil==='motorista'&&x.ativo).length;
 }
 async function criarMotorista(){
@@ -444,25 +444,88 @@ function preencherDanfe(raw){
 function blob(data){let a=data.split(','),b=atob(a[1]),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return new Blob([u],{type:'image/png'})}
 function clean(x){return String(x).replace(/[^a-zA-Z0-9._-]/g,'_')}
 async function up(path,file){let {error}=await sb.storage.from('global-entregas').upload(path,file);if(error)throw error;return path}
+
+function prepararNovaEntrega(){
+ const admin=perfil?.perfil==='admin';
+ document.getElementById('programacaoMotorista').classList.toggle('hidden',!admin);
+ document.querySelectorAll('.baixa-only').forEach(el=>el.classList.toggle('hidden',admin));
+ document.getElementById('finalizacaoTitulo').textContent=admin?'2. Programação':'5. Finalização';
+ document.getElementById('salvarBtn').textContent=admin?'Programar entrega':'Finalizar e salvar entrega';
+ document.getElementById('aceite').closest('label').classList.toggle('hidden',admin);
+ if(admin){entregaEmBaixa=null;carregarUsuarios();}else if(!entregaEmBaixa){show('entregas');}
+}
+async function iniciarBaixa(id){
+ if(perfil?.perfil!=='motorista')return;
+ const x=entregasCache.find(e=>e.id===id&&e.motorista_id===perfil.user_id&&e.status!=='entregue');
+ if(!x){alert('Entrega indisponível para este motorista.');return}
+ entregaEmBaixa=x;show('nova');
+ document.getElementById('programacaoMotorista').classList.add('hidden');
+ document.querySelectorAll('.baixa-only').forEach(el=>el.classList.remove('hidden'));
+ document.getElementById('finalizacaoTitulo').textContent='5. Finalização';
+ document.getElementById('salvarBtn').textContent='Finalizar e salvar entrega';
+ document.getElementById('aceite').closest('label').classList.remove('hidden');
+ nf.value=x.numero_nf||'';serie.value=x.serie||'';chave.value=x.chave_acesso||'';
+ dest.value=x.destinatario||'';cidade.value=x.cidade||'';uf.value=x.uf||'';
+ [nf,serie,chave,dest,cidade,uf].forEach(el=>el.readOnly=true);
+ pdf.required=false;pdf.closest('.upload').classList.add('hidden');
+ pdf.closest('.panel').querySelector('label').classList.add('hidden');
+ saveStatus.textContent='Entrega programada. Preencha o recebimento e colete a assinatura.';
+}
 async function salvarEntrega(){
+ const admin=perfil?.perfil==='admin';
  try{
-  if(!nf.value||!dest.value||!recNome.value||!pdf.files[0])throw Error('Preencha NF, destinatário, recebedor e PDF.');
-  if(!assinou)throw Error('Colete a assinatura.');if(!aceite.checked)throw Error('Marque a confirmação.');
-  salvarBtn.disabled=true;saveStatus.textContent='Enviando arquivos...';let id=crypto.randomUUID(),base=`${perfil.user_id}/${id}`;
-  let pdfPath=await up(`${base}/nota_${clean(pdf.files[0].name)}`,pdf.files[0]);let sigPath=await up(`${base}/assinatura.png`,blob(sigConfirmedData));
-  let fotoPath=null;if(foto.files[0])fotoPath=await up(`${base}/foto_${clean(foto.files[0].name)}`,foto.files[0]);
-  let payload={id,motorista_id:perfil.user_id,motorista_nome:perfil.nome||null,numero_nf:nf.value,destinatario:dest.value,recebedor_nome:recNome.value,entregue_em:new Date(`${data.value}T${hora.value||'00:00'}`).toISOString(),pdf_path:pdfPath,assinatura_path:sigPath,foto_path:fotoPath,serie:serie.value||null,chave_acesso:chave.value||null,cidade:cidade.value||null,uf:uf.value.toUpperCase()||null,recebedor_documento:recDoc.value||null,recebedor_funcao:recFunc.value||null,observacoes:obs.value||null,latitude:coords?.lat||null,longitude:coords?.lng||null,precisao_gps:coords?.acc||null,confirmado:true};
-  let {error}=await sb.from('global_entregas').insert(payload);if(error)throw error;saveStatus.textContent='Entrega salva com sucesso.';alert('Comprovante salvo com sucesso.');await carregarEntregas();
+  if(admin){
+   if(!nf.value.trim()||!dest.value.trim()||!motoristaSelecionado.value||!pdf.files[0])throw Error('Informe NF, destinatário, PDF e motorista.');
+   const motorista=motoristasCache.find(x=>x.user_id===motoristaSelecionado.value);
+   if(!motorista)throw Error('Motorista inválido ou inativo.');
+   salvarBtn.disabled=true;saveStatus.textContent='Programando entrega...';
+   const id=crypto.randomUUID();
+   const pdfPath=await up(`programadas/${id}/nota_${clean(pdf.files[0].name)}`,pdf.files[0]);
+   const payload={id,motorista_id:motorista.user_id,motorista_nome:motorista.nome||null,numero_nf:nf.value.trim(),serie:serie.value||null,chave_acesso:chave.value||null,destinatario:dest.value.trim(),cidade:cidade.value||null,uf:uf.value.toUpperCase()||null,pdf_path:pdfPath,status:'pendente',confirmado:false};
+   const {error}=await sb.from('global_entregas').insert(payload);if(error)throw error;
+   saveStatus.textContent='Entrega programada para '+motorista.nome+'.';
+   [nf,serie,chave,dest,cidade,uf,pdf].forEach(el=>el.value='');
+   await carregarEntregas();show('entregas');return;
+  }
+  if(!entregaEmBaixa)throw Error('Selecione uma entrega pendente em Minhas Entregas.');
+  if(!recNome.value.trim()||!assinou||!aceite.checked)throw Error('Informe o recebedor, assinatura e confirmação.');
+  salvarBtn.disabled=true;saveStatus.textContent='Salvando comprovante...';
+  const id=entregaEmBaixa.id,base=`${perfil.user_id}/${id}`;
+  const sigPath=await up(`${base}/assinatura.png`,blob(sigConfirmedData));
+  let fotoPath=entregaEmBaixa.foto_path||null;
+  if(foto.files[0])fotoPath=await up(`${base}/foto_${clean(foto.files[0].name)}`,foto.files[0]);
+  const payload={recebedor_nome:recNome.value.trim(),recebedor_documento:recDoc.value||null,recebedor_funcao:recFunc.value||null,observacoes:obs.value||null,latitude:coords?.lat??null,longitude:coords?.lng??null,precisao_gps:coords?.acc??null,assinatura_path:sigPath,foto_path:fotoPath,confirmado:true,entregue_em:new Date().toISOString(),status:'entregue'};
+  const {data,error}=await sb.from('global_entregas').update(payload).eq('id',id).eq('motorista_id',perfil.user_id).neq('status','entregue').select('id').single();
+  if(error)throw error;if(!data)throw Error('Entrega não encontrada ou sem permissão.');
+  entregaEmBaixa=null;saveStatus.textContent='Entrega concluída com sucesso.';
+  await carregarEntregas();show('entregas');
  }catch(e){saveStatus.textContent='Erro: '+e.message}finally{salvarBtn.disabled=false}
 }
 async function carregarEntregas(){
- let q=sb.from('global_entregas').select('*').order('entregue_em',{ascending:false});
- if(perfil?.perfil!=='admin')q=q.eq('motorista_id',perfil.user_id);let {data,error}=await q;if(error){console.error(error);return}entregasCache=data||[];renderEntregas();
- if(perfil?.perfil==='admin'){kEnt.textContent=entregasCache.length;let hoje=new Date().toISOString().slice(0,10);kHoje.textContent=entregasCache.filter(x=>String(x.entregue_em||'').slice(0,10)===hoje).length;kGps.textContent=entregasCache.filter(x=>x.latitude!=null).length;recentes.innerHTML=entregasCache.slice(0,8).map(row).join('')}
+ let q=sb.from('global_entregas').select('*').order('created_at',{ascending:false});
+ if(perfil?.perfil!=='admin')q=q.eq('motorista_id',perfil.user_id);
+ const {data,error}=await q;
+ if(error){console.error(error);document.getElementById('listaEntregas').innerHTML='<tr><td colspan="7">Erro ao carregar: '+esc(error.message)+'</td></tr>';return}
+ entregasCache=data||[];renderEntregas();
+ if(perfil?.perfil==='admin'){
+  kEnt.textContent=entregasCache.length;
+  const hoje=new Date().toISOString().slice(0,10);
+  kHoje.textContent=entregasCache.filter(x=>String(x.entregue_em||'').slice(0,10)===hoje).length;
+  kGps.textContent=entregasCache.filter(x=>x.latitude!=null).length;
+  recentes.innerHTML=entregasCache.slice(0,8).map(row).join('');
+ }
 }
-function proofButton(x){return `<button type="button" class="comprov-btn" onclick="abrirComprovante('${esc(x.id)}')">Ver foto / assinatura</button>`}
-function row(x){return `<tr><td>${esc(x.numero_nf)}</td><td>${esc(x.destinatario)}</td><td>${esc(x.motorista_nome||perfil?.nome||'')}</td><td>${esc(String(x.entregue_em||'').slice(0,10))}</td><td><span class="badge ok">Entregue</span></td><td>${proofButton(x)}</td></tr>`}
-function renderEntregas(){let s=(busca?.value||'').toLowerCase(),a=entregasCache.filter(x=>((x.numero_nf||'')+' '+(x.destinatario||'')).toLowerCase().includes(s));listaEntregas.innerHTML=a.map(x=>`<tr><td>${esc(x.numero_nf)}</td><td>${esc(x.destinatario)}</td><td>${esc(x.recebedor_nome)}</td><td>${esc(x.motorista_nome||perfil?.nome||'')}</td><td>${esc(x.entregue_em?new Date(x.entregue_em).toLocaleString('pt-BR'):'')}</td><td>${proofButton(x)}</td></tr>`).join('')}
+function proofButton(x){return x.status==='entregue'||x.confirmado? `<button type="button" class="comprov-btn" onclick="abrirComprovante('${esc(x.id)}')">Ver foto / assinatura</button>`:'Aguardando baixa'}
+function statusEntrega(x){return x.status||(x.confirmado?'entregue':'pendente')}
+function statusAcao(x){
+ const st=statusEntrega(x);
+ return `<span class="badge ${st==='entregue'?'ok':'off'}">${esc(st)}</span>`+(perfil?.perfil==='motorista'&&st!=='entregue'?` <button class="btn orange" onclick="iniciarBaixa('${esc(x.id)}')">Realizar baixa</button>`:'');
+}
+function row(x){return `<tr><td>${esc(x.numero_nf)}</td><td>${esc(x.destinatario)}</td><td>${esc(x.motorista_nome||'')}</td><td>${esc(String(x.entregue_em||x.created_at||'').slice(0,10))}</td><td>${statusAcao(x)}</td><td>${proofButton(x)}</td></tr>`}
+function renderEntregas(){
+ let s=(busca?.value||'').toLowerCase(),a=entregasCache.filter(x=>((x.numero_nf||'')+' '+(x.destinatario||'')).toLowerCase().includes(s));
+ listaEntregas.innerHTML=a.map(x=>`<tr><td>${esc(x.numero_nf)}</td><td>${esc(x.destinatario)}</td><td>${esc(x.recebedor_nome||'-')}</td><td>${esc(x.motorista_nome||'')}</td><td>${esc(x.entregue_em?new Date(x.entregue_em).toLocaleString('pt-BR'):'-')}</td><td>${statusAcao(x)}</td><td>${proofButton(x)}</td></tr>`).join('');
+}
 async function signedUrl(path){
  if(!path)return null;
  const {data,error}=await sb.storage.from('global-entregas').createSignedUrl(path,3600);
