@@ -550,7 +550,20 @@ async function carregarEntregas(){
   recentes.innerHTML=entregasCache.slice(0,8).map(row).join('');
  }
 }
-function proofButton(x){return x.status==='entregue'||x.confirmado? `<button type="button" class="comprov-btn" onclick="abrirComprovante('${esc(x.id)}')">Ver foto / assinatura</button>`:'Aguardando baixa'}
+function proofButton(x){return x.status==='entregue'||x.confirmado? `<button type="button" class="comprov-btn" onclick="abrirComprovante('${esc(x.id)}')">Ver foto / assinatura</button>${perfil?.perfil==='admin'?` <button type="button" class="comprov-btn" style="background:#991b1b;color:white;margin-top:5px" onclick="limparBaixa('${esc(x.id)}')">Limpar baixa</button>`:''}`:'Aguardando baixa'}
+async function limparBaixa(id){
+ if(perfil?.perfil!=='admin')return;
+ const x=entregasCache.find(e=>String(e.id)===String(id));if(!x)return;
+ const ok=prompt('ATENÇÃO: esta ação apagará definitivamente a foto, assinatura, recebedor, data/hora e GPS da NF '+x.numero_nf+'. A nota e o motorista serão mantidos.\n\nDigite LIMPAR para confirmar:');
+ if(ok!=='LIMPAR')return;
+ try{
+  const {data,error}=await sb.functions.invoke('global-limpar-baixa',{body:{entrega_id:id,confirmacao:'LIMPAR'}});
+  if(error||!data?.ok)throw Error(data?.error||error?.message||'Falha ao limpar');
+  fecharComprovante();
+  await carregarEntregas();
+  alert('Baixa da NF '+x.numero_nf+' limpa. Entrega voltou para Pendente.'+(data.aviso?'\n'+data.aviso:''));
+ }catch(e){alert('Não foi possível limpar a baixa: '+e.message)}
+}
 function statusEntrega(x){return x.status||(x.confirmado?'entregue':'pendente')}
 let rotaAtual=null,mapaLeaflet=null,linhaRota=null,marcadorMotorista=null,marcadorDestino=null,gpsWatch=null,rotaUltimoCalculo=0,rotaUltimaPos=null;
 function mensagemRota(m){document.getElementById('rotaAviso').textContent=m}
