@@ -155,7 +155,7 @@ body.sig-open{overflow:hidden;touch-action:none}
   <label>PDF da Nota Fiscal *</label><div class="upload"><input id="pdf" type="file" accept="application/pdf,.pdf"><small id="pdfNome">Selecione o DANFE em PDF.</small></div>
   <div class="grid3"><div><label>Nº NF *</label><input id="nf"></div><div><label>Série</label><input id="serie"></div><div><label>Chave de acesso</label><input id="chave"></div></div>
   <label>Destinatário *</label><input id="dest">
-  <div class="grid2"><div><label>Cidade</label><input id="cidade"></div><div><label>UF</label><input id="uf" maxlength="2"></div></div>
+  <label>Endereço completo da entrega (rua, número, bairro e CEP)</label><input id="enderecoEntrega" placeholder="Rua, número, bairro, CEP" autocomplete="street-address"><div class="grid2"><div><label>Cidade</label><input id="cidade"></div><div><label>UF</label><input id="uf" maxlength="2"></div></div><div id="mapaNaBaixa" class="hidden" style="margin-top:10px"><button type="button" class="btn darkbtn full" onclick="abrirRotaEntrega(entregaEmBaixa?.id)">📍 Abrir rota no Google Maps</button></div>
  </div>
  <div class="panel baixa-only"><h2>2. Recebedor</h2><div class="grid2"><div><label>Nome *</label><input id="recNome"></div><div><label>CPF/Documento</label><input id="recDoc"></div></div><label>Função/Setor</label><input id="recFunc"><label>Observações / ressalvas</label><textarea id="obs"></textarea></div>
  <div class="panel baixa-only"><h2>3. Evidências</h2><div class="grid2"><div><label>Data</label><input id="data" type="date"></div><div><label>Hora</label><input id="hora" type="time"></div></div>
@@ -465,8 +465,8 @@ async function iniciarBaixa(id){
  document.getElementById('salvarBtn').textContent='Finalizar e salvar entrega';
  document.getElementById('aceite').closest('label').classList.remove('hidden');
  nf.value=x.numero_nf||'';serie.value=x.serie||'';chave.value=x.chave_acesso||'';
- dest.value=x.destinatario||'';cidade.value=x.cidade||'';uf.value=x.uf||'';
- [nf,serie,chave,dest,cidade,uf].forEach(el=>el.readOnly=true);
+ dest.value=x.destinatario||'';cidade.value=x.cidade||'';uf.value=x.uf||'';enderecoEntrega.value=x.endereco_entrega||'';document.getElementById('mapaNaBaixa').classList.toggle('hidden',!x.endereco_entrega);
+ [nf,serie,chave,dest,cidade,uf,enderecoEntrega].forEach(el=>el.readOnly=true);
  pdf.required=false;pdf.closest('.upload').classList.add('hidden');
  pdf.closest('.panel').querySelector('label').classList.add('hidden');
  saveStatus.textContent='Entrega programada. Preencha o recebimento e colete a assinatura.';
@@ -475,16 +475,16 @@ async function salvarEntrega(){
  const admin=perfil?.perfil==='admin';
  try{
   if(admin){
-   if(!nf.value.trim()||!dest.value.trim()||!motoristaSelecionado.value||!pdf.files[0])throw Error('Informe NF, destinatário, PDF e motorista.');
+   if(!nf.value.trim()||!dest.value.trim()||!motoristaSelecionado.value||!pdf.files[0]||!enderecoEntrega.value.trim()||!cidade.value.trim()||!uf.value.trim())throw Error('Informe NF, destinatário, PDF, motorista e endereço completo (incluindo cidade e UF).');
    const motorista=motoristasCache.find(x=>x.user_id===motoristaSelecionado.value);
    if(!motorista)throw Error('Motorista inválido ou inativo.');
    salvarBtn.disabled=true;saveStatus.textContent='Programando entrega...';
    const id=crypto.randomUUID();
    const pdfPath=await up(`programadas/${id}/nota_${clean(pdf.files[0].name)}`,pdf.files[0]);
-   const payload={id,motorista_id:motorista.user_id,motorista_nome:motorista.nome||null,numero_nf:nf.value.trim(),serie:serie.value||null,chave_acesso:chave.value||null,destinatario:dest.value.trim(),cidade:cidade.value||null,uf:uf.value.toUpperCase()||null,pdf_path:pdfPath,status:'pendente',confirmado:false};
+   const payload={id,motorista_id:motorista.user_id,motorista_nome:motorista.nome||null,numero_nf:nf.value.trim(),serie:serie.value||null,chave_acesso:chave.value||null,destinatario:dest.value.trim(),endereco_entrega:enderecoEntrega.value.trim(),cidade:cidade.value||null,uf:uf.value.toUpperCase()||null,pdf_path:pdfPath,status:'pendente',confirmado:false};
    const {error}=await sb.from('global_entregas').insert(payload);if(error)throw error;
    saveStatus.textContent='Entrega programada para '+motorista.nome+'.';
-   [nf,serie,chave,dest,cidade,uf,pdf].forEach(el=>el.value='');
+   [nf,serie,chave,dest,cidade,uf,enderecoEntrega,pdf].forEach(el=>el.value='');
    await carregarEntregas();show('entregas');return;
   }
   if(!entregaEmBaixa)throw Error('Selecione uma entrega pendente em Minhas Entregas.');
@@ -517,9 +517,17 @@ async function carregarEntregas(){
 }
 function proofButton(x){return x.status==='entregue'||x.confirmado? `<button type="button" class="comprov-btn" onclick="abrirComprovante('${esc(x.id)}')">Ver foto / assinatura</button>`:'Aguardando baixa'}
 function statusEntrega(x){return x.status||(x.confirmado?'entregue':'pendente')}
+function abrirRotaEntrega(id){
+ const x=entregasCache.find(e=>String(e.id)===String(id));
+ if(!x|| (perfil?.perfil==='motorista'&&x.motorista_id!==perfil.user_id))return;
+ if(!x.endereco_entrega){alert('Endereço completo não cadastrado. Solicite ao administrador antes de iniciar a viagem.');return;}
+ const destino=[x.endereco_entrega,x.cidade,x.uf,'Brasil'].filter(Boolean).join(', ');
+ window.open('https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(destino)+'&travelmode=driving','_blank','noopener,noreferrer');
+}
+function botaoMapa(x){return x.endereco_entrega?` <button type="button" class="btn darkbtn" onclick="abrirRotaEntrega('${esc(x.id)}')">📍 Abrir Maps</button>`:''}
 function statusAcao(x){
  const st=statusEntrega(x);
- return `<span class="badge ${st==='entregue'?'ok':'off'}">${esc(st)}</span>`+(perfil?.perfil==='motorista'&&st!=='entregue'?` <button class="btn orange" onclick="iniciarBaixa('${esc(x.id)}')">Realizar baixa</button>`:'');
+ return `<span class="badge ${st==='entregue'?'ok':'off'}">${esc(st)}</span>`+(perfil?.perfil==='motorista'&&st!=='entregue'?` <button class="btn orange" onclick="iniciarBaixa('${esc(x.id)}')">Realizar baixa</button>${botaoMapa(x)}`:'');
 }
 function row(x){return `<tr><td>${esc(x.numero_nf)}</td><td>${esc(x.destinatario)}</td><td>${esc(x.motorista_nome||'')}</td><td>${esc(String(x.entregue_em||x.created_at||'').slice(0,10))}</td><td>${statusAcao(x)}</td><td>${proofButton(x)}</td></tr>`}
 function renderEntregas(){
