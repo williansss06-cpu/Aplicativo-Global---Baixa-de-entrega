@@ -114,7 +114,7 @@ body.sig-open{overflow:hidden;touch-action:none}
 </style>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-</head>
+<style>#rotaIntegrada.nav-expand{position:fixed;inset:0;z-index:9999;background:#f3f4f6;overflow:auto;padding:12px}#rotaIntegrada.nav-expand #mapaInterno{height:60dvh!important}</style></head>
 <body>
 <section id="login" class="login">
  <div class="loginbox">
@@ -181,7 +181,7 @@ body.sig-open{overflow:hidden;touch-action:none}
  <h1>Rota da entrega</h1><div class="sub" id="rotaResumo">Carregando destino...</div>
  <div class="panel">
   <div id="mapaInterno" style="height:min(62vh,540px);min-height:300px;border-radius:12px;overflow:hidden;background:#e9edf0"></div>
-  <p id="rotaAviso" role="status" style="font-size:13px;color:#4b5563">Obtendo sua localização...</p>
+  <div id="navPainel" style="background:#172333;color:white;padding:14px;border-radius:10px;margin:10px 0"><b id="navInstrucao">Aguardando GPS e trajeto</b><div id="navMetricas" style="margin-top:8px;font-size:15px">—</div></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn orange" id="navAtivar" onclick="ativarNav()">Iniciar navegação GPS</button><button class="btn darkbtn" id="navVoz" onclick="alternarVoz()">Voz: desligada</button><button class="btn darkbtn" onclick="telaNav()">Tela cheia</button></div><p id="rotaAviso" role="status" style="font-size:13px;color:#4b5563">Obtendo sua localização...</p>
   <div style="display:flex;gap:10px;flex-wrap:wrap">
    <button class="btn orange" type="button" onclick="baixarEntregaDaRota()">Realizar baixa</button>
    <button class="btn darkbtn" type="button" onclick="if(rotaAtual)abrirRotaEntrega(rotaAtual.id)">Recalcular rota</button><button class="btn darkbtn" type="button" onclick="abrirNavegadorExterno()">Google Maps externo (opcional)</button>
@@ -566,7 +566,15 @@ async function limparBaixa(id){
 function statusEntrega(x){return x.status||(x.confirmado?'entregue':'pendente')}
 let rotaAtual=null,mapaLeaflet=null,linhaRota=null,marcadorMotorista=null,marcadorDestino=null,gpsWatch=null,rotaUltimoCalculo=0,rotaUltimaPos=null;
 function mensagemRota(m){document.getElementById('rotaAviso').textContent=m}
-function pararGPS(){if(gpsWatch!==null&&navigator.geolocation){navigator.geolocation.clearWatch(gpsWatch);gpsWatch=null}}
+let navAtiva=false,navVoz=false,navDados=null,navPos=null,navDestino=null,navFalado='',navToken=0,navOcupado=false;
+function navTexto(id,t){document.getElementById(id).textContent=t}
+function falarNav(t){if(!navVoz||!window.speechSynthesis)return;try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.lang='pt-BR';speechSynthesis.speak(u)}catch(_){}}
+function alternarVoz(){navVoz=!navVoz;navTexto('navVoz','Voz: '+(navVoz?'ligada':'desligada'));if(navVoz)falarNav('Orientação por voz ativada');else if(window.speechSynthesis)speechSynthesis.cancel()}
+function ativarNav(){navAtiva=!navAtiva;navTexto('navAtivar',navAtiva?'Pausar navegação':'Iniciar navegação GPS');if(navAtiva&&navPos){mapaLeaflet.setView(navPos,17);atualizarNav(navPos)}}
+function telaNav(){const el=document.getElementById('rotaIntegrada');if(el.classList.contains('nav-expand')){el.classList.remove('nav-expand')}else{el.classList.add('nav-expand')}setTimeout(()=>mapaLeaflet?.invalidateSize(),100)}
+function instrucaoNav(st){const m=st.maneuver||{},mod={'left':'à esquerda','right':'à direita','slight left':'levemente à esquerda','slight right':'levemente à direita','sharp left':'acentuadamente à esquerda','sharp right':'acentuadamente à direita','straight':'em frente','uturn':'faça o retorno'}[m.modifier]||'';let t=m.type==='arrive'?'Chegue ao destino':m.type==='roundabout'||m.type==='rotary'?'Na rotatória, pegue a saída '+(m.exit||'indicada'):m.type==='depart'?'Siga em frente':m.modifier==='uturn'?'Faça o retorno':m.type==='merge'?'Entre na via '+mod:m.type==='fork'?'Mantenha-se '+mod:m.type==='turn'?'Vire '+mod:'Siga '+mod;return t+(st.name&&m.type!=='arrive'?' em '+st.name:'')}
+function atualizarNav(pos){if(!navDados||!navDestino)return;const d=mapaLeaflet.distance(pos,navDestino);if(d<60){navTexto('navInstrucao','Você está próximo do destino. Confirme o local.');if(navFalado!=='chegada'){navFalado='chegada';falarNav('Você está próximo do destino. Confirme o local.')}return}const steps=navDados.legs?.flatMap(l=>l.steps||[])||[];const coords=navDados.geometry.coordinates;let best=Infinity,idx=0;for(let i=0;i<coords.length;i++){const q=mapaLeaflet.distance(pos,[coords[i][1],coords[i][0]]);if(q<best){best=q;idx=i}}let restante=0;for(let i=idx+1;i<coords.length;i++)restante+=mapaLeaflet.distance([coords[i-1][1],coords[i-1][0]],[coords[i][1],coords[i][0]]);let percorrido=Math.max(0,navDados.distance-restante),ac=0,step=steps[steps.length-1],ate=restante;for(let i=0;i<steps.length-1;i++){ac+=steps[i].distance;if(ac>percorrido+15){step=steps[i+1];ate=ac-percorrido;break}}const min=Math.max(1,Math.round(navDados.duration*(restante/Math.max(1,navDados.distance))/60));navTexto('navMetricas',(restante/1000).toFixed(1)+' km restantes • '+min+' min estimados');if(step){const t=instrucaoNav(step);navTexto('navInstrucao','Em '+Math.max(0,Math.round(ate/10)*10)+' m: '+t);const k=t+':'+(ate<80?'agora':'aproxima');if(navAtiva&&ate<350&&navFalado!==k){navFalado=k;falarNav((ate<80?'Agora, ':'Em '+Math.round(ate/10)*10+' metros, ')+t)}}return best}
+function pararGPS(){navToken++;navOcupado=false;navAtiva=false;navVoz=false;navDados=null;navPos=null;navDestino=null;navFalado='';if(window.speechSynthesis)speechSynthesis.cancel();document.getElementById('rotaIntegrada')?.classList.remove('nav-expand');navTexto('navAtivar','Iniciar navegação GPS');navTexto('navVoz','Voz: desligada');navTexto('navInstrucao','Aguardando GPS e trajeto');navTexto('navMetricas','—');if(gpsWatch!==null&&navigator.geolocation){navigator.geolocation.clearWatch(gpsWatch);gpsWatch=null}}
 function fecharRota(){pararGPS();rotaAtual=null;show('entregas')}
 function baixarEntregaDaRota(){if(!rotaAtual)return;const id=rotaAtual.id;pararGPS();rotaAtual=null;iniciarBaixa(id)}
 function abrirNavegadorExterno(){
@@ -587,35 +595,35 @@ async function abrirRotaEntrega(id){
  if(marcadorMotorista){mapaLeaflet.removeLayer(marcadorMotorista);marcadorMotorista=null}
  if(marcadorDestino){mapaLeaflet.removeLayer(marcadorDestino);marcadorDestino=null}
  setTimeout(()=>mapaLeaflet.invalidateSize(),100);
- const idAtual=x.id;
+ const idAtual=x.id, token=navToken;
  try{
   const {data:geo,error:geoError}=await sb.functions.invoke('global-geocodificar-entrega',{body:{entrega_id:idAtual}});
-  if(!rotaAtual||rotaAtual.id!==idAtual)return;
+  if(!rotaAtual||rotaAtual.id!==idAtual||token!==navToken)return;
   if(geoError||!geo||!Number.isFinite(Number(geo.latitude))||!Number.isFinite(Number(geo.longitude))){
    let detalhe=geo?.error||'';
    if(geoError?.context?.json){try{const d=await geoError.context.json();detalhe=[d.error,d.status].filter(Boolean).join(' — ')}catch(_){}}
-   if(!rotaAtual||rotaAtual.id!==idAtual)return;
+   if(!rotaAtual||rotaAtual.id!==idAtual||token!==navToken)return;
    mensagemRota('Não foi possível calcular a rota: '+(detalhe||'falha na localização do destino')+'.');
    return;
   }
-  const destino=[Number(geo.latitude),Number(geo.longitude)];
+  const destino=[Number(geo.latitude),Number(geo.longitude)];navDestino=destino;
   if(geo.precisao==='APPROXIMATE'||geo.precisao==='GEOMETRIC_CENTER')mensagemRota('Localização aproximada: confirme o endereço antes de viajar.');
   marcadorDestino=L.marker(destino).addTo(mapaLeaflet).bindPopup('Destino: '+(x.destinatario||'Entrega'));
   mapaLeaflet.setView(destino,14);
   mensagemRota('Destino localizado pelo Google. Confirme o ponto antes de viajar. Aguardando GPS...');
   if(!navigator.geolocation){mensagemRota('GPS indisponível. Use a navegação externa.');return}
   gpsWatch=navigator.geolocation.watchPosition(p=>{
-   if(!rotaAtual||rotaAtual.id!==idAtual)return;
+   if(!rotaAtual||rotaAtual.id!==idAtual||token!==navToken)return;
    const origem=[p.coords.latitude,p.coords.longitude];
    if(!marcadorMotorista)marcadorMotorista=L.circleMarker(origem,{radius:9,color:'#155eef',fillColor:'#155eef',fillOpacity:.9}).addTo(mapaLeaflet).bindPopup('Sua posição');
    else marcadorMotorista.setLatLng(origem);
-   const now=Date.now();
-   if(now-rotaUltimoCalculo<60000&&rotaUltimaPos&&mapaLeaflet.distance(rotaUltimaPos,origem)<250)return;
+   navPos=origem;const desvio=atualizarNav(origem);if(navAtiva)mapaLeaflet.panTo(origem);const now=Date.now();
+   if(navOcupado|| (rotaUltimoCalculo&&now-rotaUltimoCalculo<30000)|| (navDados&&!(desvio>100)&&now-rotaUltimoCalculo<120000))return;navOcupado=true;
    rotaUltimoCalculo=now;rotaUltimaPos=origem;
-   fetch('https://router.project-osrm.org/route/v1/driving/'+origem[1]+','+origem[0]+';'+destino[1]+','+destino[0]+'?overview=full&geometries=geojson')
+   fetch('https://router.project-osrm.org/route/v1/driving/'+origem[1]+','+origem[0]+';'+destino[1]+','+destino[0]+'?overview=full&geometries=geojson&steps=true')
     .then(r=>{if(!r.ok)throw Error('Rota indisponível');return r.json()})
-    .then(j=>{if(!rotaAtual||rotaAtual.id!==idAtual)return;if(!j.routes?.length)throw Error('Sem rota');const rt=j.routes[0];if(linhaRota)mapaLeaflet.removeLayer(linhaRota);linhaRota=L.geoJSON(rt.geometry,{style:{color:'#1769ff',weight:6,opacity:.95}}).addTo(mapaLeaflet);mapaLeaflet.fitBounds(linhaRota.getBounds(),{padding:[25,25]});mensagemRota('Trajeto aproximado: '+(rt.distance/1000).toFixed(1)+' km. Mapa informativo, sem instruções de voz ou trânsito em tempo real. Confirme o destino.')})
-    .catch(()=>mensagemRota('GPS ativo, mas não foi possível calcular o trajeto. Use Google Maps para navegação.'));
+    .then(j=>{if(!rotaAtual||rotaAtual.id!==idAtual||token!==navToken)return;if(!j.routes?.length)throw Error('Sem rota');const rt=j.routes[0];if(linhaRota)mapaLeaflet.removeLayer(linhaRota);linhaRota=L.geoJSON(rt.geometry,{style:{color:'#1769ff',weight:6,opacity:.95}}).addTo(mapaLeaflet);navDados=rt;if(!navAtiva)mapaLeaflet.fitBounds(linhaRota.getBounds(),{padding:[25,25]});atualizarNav(navPos||origem);mensagemRota('GPS ativo. Estimativas sem trânsito em tempo real. Confirme o destino e siga a sinalização.')})
+    .catch(()=>{if(token===navToken)mensagemRota('Não foi possível atualizar o trajeto. Use Google Maps para navegação.')}).finally(()=>{if(token===navToken)navOcupado=false});
   },e=>mensagemRota('GPS não disponível: '+e.message+'. Você pode abrir o Google Maps.'),{enableHighAccuracy:true,maximumAge:10000,timeout:20000});
  }catch(e){mensagemRota('Não foi possível localizar o destino no mapa integrado. '+e.message+'. Use Google Maps.')}
 }
