@@ -184,7 +184,7 @@ body.sig-open{overflow:hidden;touch-action:none}
   <p id="rotaAviso" role="status" style="font-size:13px;color:#4b5563">Obtendo sua localização...</p>
   <div style="display:flex;gap:10px;flex-wrap:wrap">
    <button class="btn orange" type="button" onclick="baixarEntregaDaRota()">Realizar baixa</button>
-   <button class="btn darkbtn" type="button" onclick="abrirNavegadorExterno()">Navegar no Google Maps</button>
+   <button class="btn darkbtn" type="button" onclick="if(rotaAtual)abrirRotaEntrega(rotaAtual.id)">Recalcular rota</button><button class="btn darkbtn" type="button" onclick="abrirNavegadorExterno()">Google Maps externo (opcional)</button>
    <button class="btn darkbtn" type="button" onclick="fecharRota()">Voltar às entregas</button>
   </div>
  </div>
@@ -579,7 +579,7 @@ async function abrirRotaEntrega(id){
  const x=entregasCache.find(e=>String(e.id)===String(id));
  if(!x||perfil?.perfil!=='motorista'||x.motorista_id!==perfil.user_id||statusEntrega(x)==='entregue')return;
  if(!x.endereco_entrega){alert('Endereço não cadastrado. Solicite ao administrador.');return}
- pararGPS();rotaAtual=x;show('rotaIntegrada');
+ pararGPS();rotaUltimoCalculo=0;rotaUltimaPos=null;rotaAtual=x;show('rotaIntegrada');
  document.getElementById('rotaResumo').textContent='NF '+(x.numero_nf||'')+' — '+[x.endereco_entrega,x.cidade,x.uf].filter(Boolean).join(', ');
  mensagemRota('Localizando destino e aguardando autorização de GPS...');
  if(!window.L){mensagemRota('Mapa indisponível neste momento. Use a opção Google Maps.');return}
@@ -593,7 +593,10 @@ async function abrirRotaEntrega(id){
   const {data:geo,error:geoError}=await sb.functions.invoke('global-geocodificar-entrega',{body:{entrega_id:idAtual}});
   if(!rotaAtual||rotaAtual.id!==idAtual)return;
   if(geoError||!geo||!Number.isFinite(Number(geo.latitude))||!Number.isFinite(Number(geo.longitude))){
-   mensagemRota('Endereço não localizado. Confira o endereço cadastrado e tente novamente. O botão Google Maps permanece disponível.');
+   let detalhe=geo?.error||'';
+   if(geoError?.context?.json){try{const d=await geoError.context.json();detalhe=[d.error,d.status].filter(Boolean).join(' — ')}catch(_){}}
+   if(!rotaAtual||rotaAtual.id!==idAtual)return;
+   mensagemRota('Não foi possível calcular a rota: '+(detalhe||'falha na localização do destino')+'.');
    return;
   }
   const destino=[Number(geo.latitude),Number(geo.longitude)];
