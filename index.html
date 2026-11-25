@@ -196,7 +196,7 @@ body.sig-open{overflow:hidden;touch-action:none}
 
 <section id="config" class="page hidden">
  <h1>Configurações</h1><div class="sub">Integrações administrativas</div>
- <div class="panel"><h2>Google</h2><label>Google Maps API Key / Credencial</label><input id="googleKey" type="password" placeholder="Cole sua chave aqui"><div class="config-note">Por segurança, a credencial não deve ser gravada no HTML. Este campo envia a chave para uma função/backend seguro quando configurado.</div><button class="btn orange" style="margin-top:12px" onclick="salvarGoogle()">Salvar credencial</button><div id="googleStatus" class="status">Nenhuma alteração realizada.</div></div>
+ <div class="panel"><h2>Google Maps</h2><div class="config-note">Credencial de servidor protegida no Supabase Secrets. Nenhuma chave é exibida nesta tela.</div><div id="googleStatus" class="status" role="status">Verifique a configuração da credencial.</div><button class="btn darkbtn" style="margin-top:12px" onclick="verificarGoogle(false)">Verificar credencial</button> <button class="btn orange" style="margin-top:12px" onclick="verificarGoogle(true)">Testar conexão</button> <a class="btn ghost" style="margin-top:12px" href="https://supabase.com/dashboard/project/gdlgceoliupjinkgunxe/functions/secrets" target="_blank" rel="noopener noreferrer">Atualizar no Supabase</a></div>
  <div class="panel"><h2>Supabase</h2><div class="config-note">Projeto conectado. A interface não exibe as credenciais. Nunca coloque service_role no navegador.</div></div>
 </section>
 </main>
@@ -266,12 +266,11 @@ async function criarMotorista(){
  if(error){mStatus.textContent='A Edge Function admin-create-user ainda precisa ser implantada ou retornou erro: '+error.message;return}
  mStatus.textContent='Motorista cadastrado com sucesso.';mNome.value=mEmail.value=mSenha.value=mPlaca.value='';carregarUsuarios();
 }
-async function salvarGoogle(){
- if(!googleKey.value.trim()){googleStatus.textContent='Informe a credencial.';return}
- googleStatus.textContent='Salvando de forma segura...';
- let {error}=await sb.functions.invoke('admin-save-google-key',{body:{google_api_key:googleKey.value.trim()}});
- if(error){googleStatus.textContent='A função segura admin-save-google-key precisa ser implantada: '+error.message;return}
- googleKey.value='';googleStatus.textContent='Credencial salva com sucesso.';
+async function verificarGoogle(test){
+ const el=document.getElementById('googleStatus');el.textContent=test?'Testando Google Geocoding...':'Verificando credencial...';
+ try{const {data,error}=await sb.functions.invoke('global-google-status',{body:{test:!!test}});if(error)throw error;
+ el.textContent=!data.configured?'Credencial não cadastrada no Supabase.':!test?'Credencial cadastrada no Supabase (autorização ainda não testada).':data.ok?'Conexão Google Geocoding autorizada.':'Credencial cadastrada, mas Google recusou a consulta: '+[data.status,data.detail].filter(Boolean).join(' — ');
+ }catch(e){el.textContent='Falha na verificação: '+e.message;}
 }
 document.getElementById('foto').addEventListener('change',e=>{
  const f=e.target.files[0],img=document.getElementById('fotoPreview');
