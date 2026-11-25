@@ -410,6 +410,7 @@ pdf.onchange=async()=>{
   }
 };
 
+function nomeDestinatario(valor){return String(valor||'').replace(/\s+/g,' ').trim().split(/\s+(?:CNPJ\s*\/\s*CPF|CPF\s*\/\s*CNPJ|CNPJ|CPF|DATA\s+DE\s+EMISS[ÃA]O|ENDERE[ÇC]O)\b/i)[0].trim()}
 function preencherDanfe(raw){
   const t=String(raw||'').replace(/\s+/g,' ').trim();
   const digits=t.replace(/\D/g,'');
@@ -433,9 +434,9 @@ function preencherDanfe(raw){
   if(m)set(serie,m[1]);
 
   // Destinatário: captura após Nome/Razão Social e antes de CNPJ/CPF.
-  m=t.match(/Destinat[aá]rio\/Remetente.*?Nome\s*\/?\s*Raz[aã]o\s*Social\s+(.+?)\s+CNPJ\/CPF/i)
-    || t.match(/Nome\s*\/?\s*Raz[aã]o\s*Social\s+(.+?)\s+CNPJ\/CPF/i);
-  if(m)set(dest,m[1]);
+  m=t.match(/Destinat[aá]rio\/Remetente.*?Nome\s*\/?\s*Raz[aã]o\s*Social\s+(.+?)\s+CNPJ\s*\/\s*CPF/i)
+    || t.match(/Nome\s*\/?\s*Raz[aã]o\s*Social\s+(.+?)\s+CNPJ\s*\/\s*CPF/i);
+  if(m)set(dest,nomeDestinatario(m[1]));
 
   // Endereço de entrega explícito prevalece sobre o endereço cadastral.
   // Restringe a busca ao trecho relevante para não capturar o endereço do emitente.
@@ -499,7 +500,7 @@ async function iniciarBaixa(id){
  document.getElementById('salvarBtn').textContent='Finalizar e salvar entrega';
  document.getElementById('aceite').closest('label').classList.remove('hidden');
  nf.value=x.numero_nf||'';serie.value=x.serie||'';chave.value=x.chave_acesso||'';
- dest.value=x.destinatario||'';cidade.value=x.cidade||'';uf.value=x.uf||'';enderecoEntrega.value=x.endereco_entrega||'';document.getElementById('mapaNaBaixa').classList.toggle('hidden',!x.endereco_entrega);
+ dest.value=nomeDestinatario(x.destinatario);cidade.value=x.cidade||'';uf.value=x.uf||'';enderecoEntrega.value=x.endereco_entrega||'';document.getElementById('mapaNaBaixa').classList.toggle('hidden',!x.endereco_entrega);
  [nf,serie,chave,dest,cidade,uf,enderecoEntrega].forEach(el=>el.readOnly=true);
  pdf.required=false;pdf.closest('.upload').classList.add('hidden');
  pdf.closest('.panel').querySelector('label').classList.add('hidden');
@@ -515,7 +516,7 @@ async function salvarEntrega(){
    salvarBtn.disabled=true;saveStatus.textContent='Programando entrega...';
    const id=crypto.randomUUID();
    const pdfPath=await up(`programadas/${id}/nota_${clean(pdf.files[0].name)}`,pdf.files[0]);
-   const payload={id,motorista_id:motorista.user_id,motorista_nome:motorista.nome||null,numero_nf:nf.value.trim(),serie:serie.value||null,chave_acesso:chave.value||null,destinatario:dest.value.trim(),endereco_entrega:enderecoEntrega.value.trim(),cidade:cidade.value||null,uf:uf.value.toUpperCase()||null,pdf_path:pdfPath,status:'pendente',confirmado:false};
+   const payload={id,motorista_id:motorista.user_id,motorista_nome:motorista.nome||null,numero_nf:nf.value.trim(),serie:serie.value||null,chave_acesso:chave.value||null,destinatario:nomeDestinatario(dest.value),endereco_entrega:enderecoEntrega.value.trim(),cidade:cidade.value||null,uf:uf.value.toUpperCase()||null,pdf_path:pdfPath,status:'pendente',confirmado:false};
    const {error}=await sb.from('global_entregas').insert(payload);if(error)throw error;
    saveStatus.textContent='Entrega programada para '+motorista.nome+'.';
    [nf,serie,chave,dest,cidade,uf,enderecoEntrega,pdf].forEach(el=>el.value='');
@@ -608,7 +609,7 @@ async function abrirRotaEntrega(id){
   }
   const destino=[Number(geo.latitude),Number(geo.longitude)];navDestino=destino;
   if(geo.precisao==='APPROXIMATE'||geo.precisao==='GEOMETRIC_CENTER')mensagemRota('Localização aproximada: confirme o endereço antes de viajar.');
-  marcadorDestino=L.marker(destino).addTo(mapaLeaflet).bindPopup('Destino: '+(x.destinatario||'Entrega'));
+  marcadorDestino=L.marker(destino).addTo(mapaLeaflet).bindPopup('Destino: '+(nomeDestinatario(x.destinatario)||'Entrega'));
   mapaLeaflet.setView(destino,14);
   mensagemRota('Destino localizado pelo Google. Confirme o ponto antes de viajar. Aguardando GPS...');
   if(!navigator.geolocation){mensagemRota('GPS indisponível. Use a navegação externa.');return}
@@ -632,10 +633,10 @@ function statusAcao(x){
  const st=statusEntrega(x);
  return `<span class="badge ${st==='entregue'?'ok':'off'}">${esc(st)}</span>`+(perfil?.perfil==='motorista'&&st!=='entregue'?` <button class="btn orange" onclick="iniciarBaixa('${esc(x.id)}')">Realizar baixa</button>${botaoMapa(x)}`:'');
 }
-function row(x){return `<tr><td>${esc(x.numero_nf)}</td><td>${esc(x.destinatario)}</td><td>${esc(x.motorista_nome||'')}</td><td>${esc(String(x.entregue_em||x.created_at||'').slice(0,10))}</td><td>${statusAcao(x)}</td><td>${proofButton(x)}</td></tr>`}
+function row(x){return `<tr><td>${esc(x.numero_nf)}</td><td>${esc(nomeDestinatario(x.destinatario))}</td><td>${esc(x.motorista_nome||'')}</td><td>${esc(String(x.entregue_em||x.created_at||'').slice(0,10))}</td><td>${statusAcao(x)}</td><td>${proofButton(x)}</td></tr>`}
 function renderEntregas(){
  let s=(busca?.value||'').toLowerCase(),a=entregasCache.filter(x=>((x.numero_nf||'')+' '+(x.destinatario||'')).toLowerCase().includes(s));
- listaEntregas.innerHTML=a.map(x=>`<tr><td>${esc(x.numero_nf)}</td><td>${esc(x.destinatario)}</td><td>${esc(x.recebedor_nome||'-')}</td><td>${esc(x.motorista_nome||'')}</td><td>${esc(x.entregue_em?new Date(x.entregue_em).toLocaleString('pt-BR'):'-')}</td><td>${statusAcao(x)}</td><td>${proofButton(x)}</td></tr>`).join('');
+ listaEntregas.innerHTML=a.map(x=>`<tr><td>${esc(x.numero_nf)}</td><td>${esc(nomeDestinatario(x.destinatario))}</td><td>${esc(x.recebedor_nome||'-')}</td><td>${esc(x.motorista_nome||'')}</td><td>${esc(x.entregue_em?new Date(x.entregue_em).toLocaleString('pt-BR'):'-')}</td><td>${statusAcao(x)}</td><td>${proofButton(x)}</td></tr>`).join('');
 }
 async function signedUrl(path){
  if(!path)return null;
@@ -646,7 +647,7 @@ async function signedUrl(path){
 async function abrirComprovante(id){
  const x=entregasCache.find(e=>String(e.id)===String(id));if(!x)return;
  const modal=document.getElementById('proofModal'),info=document.getElementById('proofInfo'),fb=document.getElementById('proofFotoBox'),ab=document.getElementById('proofAssBox');
- info.innerHTML=`<div><small>NF</small><b>${esc(x.numero_nf||'-')}</b></div><div><small>Motorista</small><b>${esc(x.motorista_nome||'-')}</b></div><div><small>Recebedor</small><b>${esc(x.recebedor_nome||'-')}</b></div><div><small>Destinatário</small><b>${esc(x.destinatario||'-')}</b></div><div><small>Data/Hora</small><b>${esc(x.entregue_em?new Date(x.entregue_em).toLocaleString('pt-BR'):'-')}</b></div><div><small>Local</small><b>${esc([x.cidade,x.uf].filter(Boolean).join(' / ')||'-')}</b></div>`;
+ info.innerHTML=`<div><small>NF</small><b>${esc(x.numero_nf||'-')}</b></div><div><small>Motorista</small><b>${esc(x.motorista_nome||'-')}</b></div><div><small>Recebedor</small><b>${esc(x.recebedor_nome||'-')}</b></div><div><small>Destinatário</small><b>${esc(nomeDestinatario(x.destinatario)||'-')}</b></div><div><small>Data/Hora</small><b>${esc(x.entregue_em?new Date(x.entregue_em).toLocaleString('pt-BR'):'-')}</b></div><div><small>Local</small><b>${esc([x.cidade,x.uf].filter(Boolean).join(' / ')||'-')}</b></div>`;
  fb.className='proof-empty';ab.className='proof-empty';fb.textContent=x.foto_path?'Carregando foto...':'Nenhuma foto registrada.';ab.textContent=x.assinatura_path?'Carregando assinatura...':'Nenhuma assinatura registrada.';
  modal.classList.remove('hidden');document.body.classList.add('sig-open');
  const [fu,su]=await Promise.all([signedUrl(x.foto_path),signedUrl(x.assinatura_path)]);
