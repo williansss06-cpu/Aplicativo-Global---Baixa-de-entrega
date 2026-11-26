@@ -168,7 +168,7 @@ body.nav-screen{overflow:hidden!important}
   <label>Destinatário *</label><input id="dest">
   <label>Endereço completo da entrega (rua, número, bairro e CEP)</label><input id="enderecoEntrega" placeholder="Rua, número, bairro, CEP" autocomplete="street-address"><div class="grid2"><div><label>Cidade</label><input id="cidade"></div><div><label>UF</label><input id="uf" maxlength="2"></div></div><div id="mapaNaBaixa" class="hidden" style="margin-top:10px"><button type="button" class="btn darkbtn full" onclick="abrirRotaEntrega(entregaEmBaixa?.id)">📍 Abrir rota no Google Maps</button></div>
  </div>
- <div class="panel baixa-only"><h2>2. Recebedor</h2><div class="grid2"><div><label>Nome *</label><input id="recNome"></div><div><label>CPF/Documento</label><input id="recDoc"></div></div><label>Função/Setor</label><input id="recFunc"><label>Observações / ressalvas</label><textarea id="obs"></textarea></div>
+ <div class="panel baixa-only"><h2>2. Recebedor</h2><div class="grid2"><div><label>Nome *</label><input id="recNome"></div><input id="recDoc" type="hidden" value=""></div><label>Função/Setor</label><input id="recFunc"><label>Observações / ressalvas</label><textarea id="obs"></textarea></div>
  <div class="panel baixa-only"><h2>3. Evidências</h2><div class="grid2"><div><label>Data</label><input id="data" type="date"></div><div><label>Hora</label><input id="hora" type="time"></div></div>
   <label>GPS</label><div class="actions"><button class="btn ghost" onclick="gps()">📍 Capturar localização</button></div><div id="gpsStatus" class="status">Não capturado.</div>
   <label>Foto da entrega</label>
@@ -538,7 +538,7 @@ async function salvarEntrega(){
   const sigPath=await up(`${base}/assinatura.png`,blob(sigConfirmedData));
   let fotoPath=entregaEmBaixa.foto_path||null;
   if(foto.files[0])fotoPath=await up(`${base}/foto_${clean(foto.files[0].name)}`,foto.files[0]);
-  const payload={recebedor_nome:recNome.value.trim(),recebedor_documento:recDoc.value||null,recebedor_funcao:recFunc.value||null,observacoes:obs.value||null,latitude:coords?.lat??null,longitude:coords?.lng??null,precisao_gps:coords?.acc??null,assinatura_path:sigPath,foto_path:fotoPath,confirmado:true,entregue_em:new Date().toISOString(),status:'entregue'};
+  const payload={recebedor_nome:recNome.value.trim(),recebedor_documento:null,recebedor_funcao:recFunc.value||null,observacoes:obs.value||null,latitude:coords?.lat??null,longitude:coords?.lng??null,precisao_gps:coords?.acc??null,assinatura_path:sigPath,foto_path:fotoPath,confirmado:true,entregue_em:new Date().toISOString(),status:'entregue'};
   const {data,error}=await sb.from('global_entregas').update(payload).eq('id',id).eq('motorista_id',perfil.user_id).neq('status','entregue').select('id').single();
   if(error)throw error;if(!data)throw Error('Entrega não encontrada ou sem permissão.');
   entregaEmBaixa=null;saveStatus.textContent='Entrega concluída com sucesso.'; alert('Entrega realizada com sucesso! Veja sua próxima entrega.');
