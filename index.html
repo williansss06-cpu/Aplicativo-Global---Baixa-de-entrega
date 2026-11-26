@@ -123,7 +123,7 @@ body.nav-screen{overflow:hidden!important}
 #rotaIntegrada.nav-expand #navPainel{flex:none;margin:0!important;border-radius:0!important;padding:12px!important}
 #rotaIntegrada.nav-expand #navPainel+div{flex:none;padding:8px;gap:6px!important;justify-content:center}
 #rotaIntegrada.nav-expand #navPainel+div button{font-size:13px;padding:10px}
-</style></head>
+</style><style>.driver-only{display:none}.driver-mode .driver-only{display:block}.driver-mode #entregas>h1,.driver-mode #entregas>.sub,.driver-mode #entregas>.panel,.driver-mode #nova>h1,.driver-mode #nova>.sub,.driver-mode #nova>.panel:not(.driver-current),.driver-mode aside .navbtn[onclick*="'nova'"]{display:none!important}.driver-mode #driverControls button{margin:8px 0;min-height:54px}.driver-mode #driverHome .btn{min-height:56px;width:100%;margin-top:12px}.driver-mode #driverHome .panel{padding:20px}.driver-mode #driverProgress{color:#a64b00;font-weight:bold;margin-bottom:12px}.driver-mode #driverHint{color:#526070}.driver-mode #rotaIntegrada.nav-expand>.panel>div:last-child{display:flex!important;padding:8px;flex:none}.driver-mode #rotaIntegrada.nav-expand>.panel>div:last-child button:not(:first-child){display:none}.driver-mode #rotaIntegrada.nav-expand>.panel>div:last-child button:first-child{width:100%}</style></head>
 <body>
 <section id="login" class="login">
  <div class="loginbox">
@@ -160,7 +160,7 @@ body.nav-screen{overflow:hidden!important}
  <div class="panel"><h2>Usuários</h2><div style="overflow:auto"><table><thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Status</th></tr></thead><tbody id="listaUsuarios"></tbody></table></div></div>
 </section>
 
-<section id="nova" class="page hidden">
+<section id="nova" class="page hidden"><div id="driverWizard" class="driver-only"><div id="driverProgress"></div><h1 id="driverTitle"></h1><p id="driverHint"></p></div>
  <h1>Nova Entrega</h1><div class="sub">Comprovante digital de recebimento</div>
  <div class="panel"><h2>1. Nota Fiscal</h2><div id="programacaoMotorista" class="hidden"><label>Motorista responsável *</label><select id="motoristaSelecionado"><option value="">Selecione o motorista</option></select><div class="status">A entrega será disponibilizada automaticamente ao motorista selecionado.</div></div>
   <label>PDF da Nota Fiscal *</label><div class="upload"><input id="pdf" type="file" accept="application/pdf,.pdf"><small id="pdfNome">Selecione o DANFE em PDF.</small></div>
@@ -184,7 +184,7 @@ body.nav-screen{overflow:hidden!important}
   </div>
  </div>
  <div class="panel"><h2 id="finalizacaoTitulo">5. Finalização</h2><label style="font-weight:normal"><input id="aceite" type="checkbox" style="width:auto"> Confirmo o recebimento da mercadoria conforme informações e ressalvas acima.</label><button id="salvarBtn" class="btn orange full" onclick="salvarEntrega()">Finalizar e salvar entrega</button><div id="saveStatus" class="status">Aguardando preenchimento.</div></div>
-</section>
+<div id="driverControls" class="driver-only"><button class="btn orange full" onclick="driverNext()">Continuar</button><button class="btn ghost full" onclick="driverStep(Math.max(0,driverStage-1))">Voltar etapa</button></div></section>
 
 <section id="rotaIntegrada" class="page hidden">
  <h1>Rota da entrega</h1><div class="sub" id="rotaResumo">Carregando destino...</div>
@@ -192,13 +192,13 @@ body.nav-screen{overflow:hidden!important}
   <div id="mapaInterno" style="height:min(62vh,540px);min-height:300px;border-radius:12px;overflow:hidden;background:#e9edf0"></div>
   <div id="navPainel" style="background:#172333;color:white;padding:14px;border-radius:10px;margin:10px 0"><b id="navInstrucao">Aguardando GPS e trajeto</b><div id="navMetricas" style="margin-top:8px;font-size:15px">—</div></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn orange" id="navAtivar" onclick="ativarNav()">Iniciar navegação GPS</button><button class="btn darkbtn" id="navVoz" onclick="alternarVoz()">Voz: desligada</button><button class="btn darkbtn" id="navTela" onclick="telaNav()">Tela cheia</button></div><p id="rotaAviso" role="status" style="font-size:13px;color:#4b5563">Obtendo sua localização...</p>
   <div style="display:flex;gap:10px;flex-wrap:wrap">
-   <button class="btn orange" type="button" onclick="baixarEntregaDaRota()">Realizar baixa</button>
+   <button class="btn orange" type="button" onclick="baixarEntregaDaRota()">Cheguei ao destino</button>
    <button class="btn darkbtn" type="button" onclick="if(rotaAtual)abrirRotaEntrega(rotaAtual.id)">Recalcular rota</button><button class="btn darkbtn" type="button" onclick="abrirNavegadorExterno()">Google Maps externo (opcional)</button>
    <button class="btn darkbtn" type="button" onclick="fecharRota()">Voltar às entregas</button>
   </div>
  </div>
 </section>
-<section id="entregas" class="page hidden">
+<section id="entregas" class="page hidden"><div id="driverHome" class="driver-only"></div>
  <h1>Entregas</h1><div class="sub">Histórico de comprovantes</div>
  <div class="panel"><input id="busca" placeholder="Buscar por NF ou destinatário..." oninput="renderEntregas()"><div style="overflow:auto;margin-top:12px"><table><thead><tr><th>NF</th><th>Destinatário</th><th>Recebedor</th><th>Motorista</th><th>Data/Hora</th><th>Status / Ação</th><th>Comprovante</th></tr></thead><tbody id="listaEntregas"></tbody></table></div></div>
 </section>
@@ -210,7 +210,7 @@ body.nav-screen{overflow:hidden!important}
 </section>
 </main>
 </div>
-<nav class="mobile-nav"><button class="adm" onclick="show('dashboard')"><b>⌂</b>Início</button><button onclick="show('nova')"><b>＋</b>Nova</button><button onclick="show('entregas')"><b>☷</b>Entregas</button><button onclick="sair()"><b>♙</b>Sair</button></nav>
+<nav class="mobile-nav"><button class="adm" onclick="show('dashboard')"><b>⌂</b>Início</button><button class="adm" onclick="show('nova')"><b>＋</b>Nova</button><button onclick="show('entregas')"><b>☷</b>Entregas</button><button onclick="sair()"><b>♙</b>Sair</button></nav>
 </section>
 
 
@@ -255,7 +255,7 @@ async function iniciar(user){
  let {data,error}=await sb.from('global_entrega_usuarios').select('*').eq('user_id',user.id).single();
  if(error||!data){loginStatus.textContent='Usuário autenticado, mas sem perfil cadastrado.';await sb.auth.signOut();return}
  if(data.ativo===false){loginStatus.textContent='Usuário inativo.';await sb.auth.signOut();return}
- perfil=data; login.classList.add('hidden');app.classList.remove('hidden');
+ perfil=data; document.body.classList.toggle('driver-mode',data.perfil==='motorista'); login.classList.add('hidden');app.classList.remove('hidden');
  nomeTopo.textContent=data.nome||user.email;perfilTopo.textContent=(data.perfil||'motorista').toUpperCase();
  document.querySelectorAll('.adm').forEach(x=>x.classList.toggle('hidden',data.perfil!=='admin'));
  if(data.perfil==='admin'){show('dashboard');await carregarTudo()}else{show('entregas');await carregarEntregas()}
@@ -513,7 +513,7 @@ async function iniciarBaixa(id){
  [nf,serie,chave,dest,cidade,uf,enderecoEntrega].forEach(el=>el.readOnly=true);
  pdf.required=false;pdf.closest('.upload').classList.add('hidden');
  pdf.closest('.panel').querySelector('label').classList.add('hidden');
- saveStatus.textContent='Entrega programada. Preencha o recebimento e colete a assinatura.';
+ saveStatus.textContent=''; [recNome,recDoc,recFunc,obs,foto].forEach(e=>e.value=''); aceite.checked=false; coords=null; limpar(); document.getElementById('fotoPreview').removeAttribute('src'); driverStep(0); gps();
 }
 async function salvarEntrega(){
  const admin=perfil?.perfil==='admin';
@@ -541,7 +541,7 @@ async function salvarEntrega(){
   const payload={recebedor_nome:recNome.value.trim(),recebedor_documento:recDoc.value||null,recebedor_funcao:recFunc.value||null,observacoes:obs.value||null,latitude:coords?.lat??null,longitude:coords?.lng??null,precisao_gps:coords?.acc??null,assinatura_path:sigPath,foto_path:fotoPath,confirmado:true,entregue_em:new Date().toISOString(),status:'entregue'};
   const {data,error}=await sb.from('global_entregas').update(payload).eq('id',id).eq('motorista_id',perfil.user_id).neq('status','entregue').select('id').single();
   if(error)throw error;if(!data)throw Error('Entrega não encontrada ou sem permissão.');
-  entregaEmBaixa=null;saveStatus.textContent='Entrega concluída com sucesso.';
+  entregaEmBaixa=null;saveStatus.textContent='Entrega concluída com sucesso.'; alert('Entrega realizada com sucesso! Veja sua próxima entrega.');
   await carregarEntregas();show('entregas');
  }catch(e){saveStatus.textContent='Erro: '+e.message}finally{salvarBtn.disabled=false}
 }
@@ -595,7 +595,7 @@ function selecionarMonitor(id){monId=id;desenharMonitor()}
 function desenharMonitor(){const e=monRows.find(x=>x.id===monId),p=e?.pos;const d=document.getElementById('monDetalhe');if(!window.L){d.textContent='Mapa indisponível';return}if(!monMap){monMap=L.map('monMapa').setView([-23.45,-46.6],9);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(monMap);monLayer=L.layerGroup().addTo(monMap)}monLayer.clearLayers();monMap.invalidateSize();if(!p){d.textContent=e?'NF '+e.numero_nf+' — aguardando localização do motorista':'Nenhuma rota selecionada';return}d.textContent='NF '+e.numero_nf+' • Último GPS: '+new Date(p.atualizado_em).toLocaleString('pt-BR')+(p.restante_km!=null?' • '+Number(p.restante_km).toFixed(1)+' km restantes':'')+(p.chegada?' • Chegada estimada (jornada simulada): '+new Date(p.chegada).toLocaleString('pt-BR'):'');const pos=[p.latitude,p.longitude];L.circleMarker(pos,{radius:10,color:'#1769ff',fillOpacity:1}).addTo(monLayer).bindPopup('Última posição do motorista');if(p.destino_lat!=null&&p.destino_lng!=null){const dest=[p.destino_lat,p.destino_lng];L.marker(dest).addTo(monLayer).bindPopup('Destino');monMap.fitBounds([pos,dest],{padding:[30,30],maxZoom:15})}else monMap.setView(pos,15)}
 function pararGPS(){monUltimo=0;monMetrics=null;navToken++;navOcupado=false;navAtiva=false;navVoz=false;navDados=null;navPos=null;navDestino=null;navFalado='';if(window.speechSynthesis)speechSynthesis.cancel();telaNav(false);navTexto('navAtivar','Iniciar navegação GPS');navTexto('navVoz','Voz: desligada');navTexto('navInstrucao','Aguardando GPS e trajeto');navTexto('navMetricas','—');if(gpsWatch!==null&&navigator.geolocation){navigator.geolocation.clearWatch(gpsWatch);gpsWatch=null}}
 function fecharRota(){pararGPS();rotaAtual=null;show('entregas')}
-function baixarEntregaDaRota(){if(!rotaAtual)return;const id=rotaAtual.id;pararGPS();rotaAtual=null;iniciarBaixa(id)}
+function baixarEntregaDaRota(){if(!rotaAtual)return;if(!confirm('Você chegou ao destino e está estacionado em segurança?'))return;const id=rotaAtual.id;pararGPS();rotaAtual=null;iniciarBaixa(id)}
 function abrirNavegadorExterno(){
  if(!rotaAtual)return;
  const destino=[rotaAtual.endereco_entrega,rotaAtual.cidade,rotaAtual.uf,'Brasil'].filter(Boolean).join(', ');
@@ -605,7 +605,7 @@ async function abrirRotaEntrega(id){
  const x=entregasCache.find(e=>String(e.id)===String(id));
  if(!x||perfil?.perfil!=='motorista'||x.motorista_id!==perfil.user_id||statusEntrega(x)==='entregue')return;
  if(!x.endereco_entrega){alert('Endereço não cadastrado. Solicite ao administrador.');return}
- pararGPS();rotaUltimoCalculo=0;rotaUltimaPos=null;rotaAtual=x;show('rotaIntegrada');
+ pararGPS();rotaUltimoCalculo=0;rotaUltimaPos=null;rotaAtual=x;show('rotaIntegrada');navAtiva=true;navVoz=true;navTexto('navAtivar','Pausar navegação');navTexto('navVoz','Voz: ligada');telaNav(true);falarNav('Iniciando viagem. Aguarde a localização do destino.');
  document.getElementById('rotaResumo').textContent='NF '+(x.numero_nf||'')+' — '+[x.endereco_entrega,x.cidade,x.uf].filter(Boolean).join(', ');
  mensagemRota('Localizando destino e aguardando autorização de GPS...');
  if(!window.L){mensagemRota('Mapa indisponível neste momento. Use a opção Google Maps.');return}
@@ -652,7 +652,12 @@ function statusAcao(x){
  return `<span class="badge ${st==='entregue'?'ok':'off'}">${esc(st)}</span>`+(perfil?.perfil==='motorista'&&st!=='entregue'?` <button class="btn orange" onclick="iniciarBaixa('${esc(x.id)}')">Realizar baixa</button>${botaoMapa(x)}`:'');
 }
 function row(x){return `<tr><td>${esc(x.numero_nf)}</td><td>${esc(nomeDestinatario(x.destinatario))}</td><td>${esc(x.motorista_nome||'')}</td><td>${esc(String(x.entregue_em||x.created_at||'').slice(0,10))}</td><td>${statusAcao(x)}</td><td>${proofButton(x)}</td></tr>`}
+let driverStage=0;
+function renderDriverHome(){const a=entregasCache.filter(x=>x.motorista_id===perfil.user_id&&statusEntrega(x)!=='entregue').sort((a,b)=>String(a.created_at).localeCompare(String(b.created_at)));const el=document.getElementById('driverHome');el.innerHTML='<h1>Minhas entregas</h1><p>'+a.length+' entrega(s) aguardando você</p>'+ (a.length?a.map((x,i)=>'<div class="panel"><small>'+(i===0?'PRÓXIMA ENTREGA':'ENTREGA '+(i+1))+'</small><h2>'+esc(nomeDestinatario(x.destinatario))+'</h2><p>NF '+esc(x.numero_nf)+' · '+esc([x.cidade,x.uf].filter(Boolean).join(' - '))+'</p><p>'+esc(x.endereco_entrega||'Endereço não cadastrado')+'</p><button class="btn orange" onclick="abrirRotaEntrega(\''+esc(x.id)+'\')">Iniciar viagem</button></div>').join(''):'<div class="panel">Tudo certo! Nenhuma entrega pendente.</div>');}
+function driverStep(n){driverStage=n;const panels=[...document.querySelectorAll('#nova > .panel')];panels.forEach((p,i)=>p.classList.toggle('driver-current',i===n+1));const titles=['Quem recebeu a mercadoria?','Fotografe o comprovante','Peça a assinatura','Confirme a entrega'];const hints=['Informe o nome do recebedor.','Use a câmera do celular.','O recebedor deve assinar com o dedo.','Confira e finalize.'];document.getElementById('driverProgress').textContent='Etapa '+(n+1)+' de 4';document.getElementById('driverTitle').textContent=titles[n];document.getElementById('driverHint').textContent=hints[n];document.querySelector('#driverControls button').classList.toggle('hidden',n===3);document.querySelector('#driverControls button:last-child').classList.toggle('hidden',n===0);window.scrollTo(0,0);}
+function driverNext(){if(driverStage===0&&!recNome.value.trim()){alert('Informe o nome de quem recebeu.');recNome.focus();return}if(driverStage===2&&!assinou){alert('Colete a assinatura antes de continuar.');return}if(driverStage<3)driverStep(driverStage+1);}
 function renderEntregas(){
+ if(perfil?.perfil==="motorista")renderDriverHome();
  let s=(busca?.value||'').toLowerCase(),a=entregasCache.filter(x=>((x.numero_nf||'')+' '+(x.destinatario||'')).toLowerCase().includes(s));
  listaEntregas.innerHTML=a.map(x=>`<tr><td>${esc(x.numero_nf)}</td><td>${esc(nomeDestinatario(x.destinatario))}</td><td>${esc(x.recebedor_nome||'-')}</td><td>${esc(x.motorista_nome||'')}</td><td>${esc(x.entregue_em?new Date(x.entregue_em).toLocaleString('pt-BR'):'-')}</td><td>${statusAcao(x)}</td><td>${proofButton(x)}</td></tr>`).join('');
 }
